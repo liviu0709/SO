@@ -51,25 +51,66 @@ size_t strlen(const char *str)
 char *strchr(const char *str, int c)
 {
 	/* TODO: Implement strchr(). */
+    for ( ; str[0] != '\0' ; str++ ) {
+        if ( str[0] == c )
+            return (char*)str;
+    }
 	return NULL;
 }
 
 char *strrchr(const char *str, int c)
 {
 	/* TODO: Implement strrchr(). */
+    char *start = (char*)str;
+    for ( ; str[0] != '\0' ; str++ );
+    for ( ; str != start ; str-- ) {
+        if ( str[0] == c )
+            return (char*)str;
+    }
+    // Start of string isnt covered by for
+    if ( str[0] == c )
+            return (char*)str;
 	return NULL;
 }
 
 char *strstr(const char *haystack, const char *needle)
 {
 	/* TODO: Implement strstr(). */
+    int l = strlen(needle);
+    char *solution = (char*)haystack;
+    for ( int s = 0 ; haystack[0] != '\0' ; haystack++ ) {
+        if ( haystack[0] == needle[s] ) {
+            if ( s == 0 )
+                solution = (char*)haystack;
+            s++;
+            if ( s == l )
+                return (char*)solution;
+        } else {
+            s = 0;
+        }
+    }
 	return NULL;
 }
+
 
 char *strrstr(const char *haystack, const char *needle)
 {
 	/* TODO: Implement strrstr(). */
-	return NULL;
+      int l = strlen(needle);
+    char *solutionFinal = NULL;
+    char *solution = NULL;
+    for ( int s = 0 ; haystack[0] != '\0' ; haystack++ ) {
+        if ( haystack[0] == needle[s] ) {
+            if ( s == 0 )
+                solution = (char*)haystack;
+            s++;
+            if ( s == l )
+                solutionFinal = (char*)solution;
+        } else {
+            s = 0;
+        }
+    }
+	return solutionFinal;
 }
 
 void *memcpy(void *destination, const void *source, size_t num)
