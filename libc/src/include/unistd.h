@@ -9,6 +9,8 @@ extern "C" {
 
 #include <internal/io.h>
 #include <internal/types.h>
+#include <stddef.h>
+#include <time.h>
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
@@ -21,7 +23,7 @@ off_t lseek(int fd, off_t offset, int whence);
 int truncate(const char *path, off_t length);
 int ftruncate(int fd, off_t length);
 unsigned int sleep(unsigned int seconds);
-
+int nanosleep(struct timespec* wait, struct timespec* rem);
 #ifdef __cplusplus
 }
 #endif

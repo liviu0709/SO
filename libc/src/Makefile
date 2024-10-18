@@ -8,6 +8,8 @@ CFLAGS += -g -O0
 
 SRCS = syscall.c \
        process/exit.c \
+	   process/sleep.c \
+	   process/nanosleep.c \
        mm/malloc.c mm/mmap.c mm/mem_list.c \
        string/string.c \
        stat/fstatat.c stat/fstat.c stat/stat.c \
