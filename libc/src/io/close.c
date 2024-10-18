@@ -8,5 +8,8 @@
 int close(int fd)
 {
 	/* TODO: Implement close(). */
-	return -1;
+    int ret = syscall(__NR_close, fd);
+    if ( ret < 0 )
+        errno = ret;
+	return ret;
 }
