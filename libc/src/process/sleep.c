@@ -8,12 +8,10 @@
 unsigned int sleep(unsigned int seconds) {
     struct timespec work, rem = {0, 0};
     work.tv_sec = seconds;
+    // Compiler bad and wont let me this isnt set at 0....
+    work.tv_nsec = 0;
     int ret = nanosleep(&work, &rem);
 
-    while ( rem.tv_sec != 0 || rem.tv_nsec != 0 ) {
-        work = rem;
-        nanosleep(&work, &rem);
-    }
     if ( ret == 0 ) {
         return 0;
     }
