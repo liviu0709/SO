@@ -6,6 +6,7 @@
 #include <internal/syscall.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <stdio.h>
 
 #define makedev(x, y) ( \
 		(((x)&0xfffff000ULL) << 32) | \
@@ -43,11 +44,23 @@ struct statx {
 int fstatat_statx(int fd, const char *restrict path, struct stat *restrict st, int flag)
 {
 	/* TODO: Implement fstatat_statx(). Use statx and makedev above. */
+    fd = flag;
+    flag = fd;
+    char *ceva = (void*)path;
+
+    ceva = (void*)st;
+    ceva++;
 	return -1;
 }
 
 int fstatat(int fd, const char *restrict path, struct stat *restrict st, int flag)
 {
 	/* TODO: Implement fstatat(). Use fstatat_statx(). */
+    puts("functie inutilaaaa");
+    fd = flag;
+    flag = fd;
+    char *ceva = (void*)path;
+    ceva = (void*)st;
+    ceva++;
 	return -1;
 }
