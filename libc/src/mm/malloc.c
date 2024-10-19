@@ -20,8 +20,9 @@ void *malloc(size_t size)
     // The call on the next line appears upon using malloc from libc... so copy it
     // mmap(NULL, 692224, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7ff296080000
     BlockSize *ret = mmap(NULL, realSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	if ( ret == MAP_FAILED )
+	if ( ret == MAP_FAILED ) {
         return NULL;
+    }
     ret->size = realSize;
     return (void*)ret + sizeof(BlockSize);
 }

@@ -27,7 +27,7 @@ char *strcat(char *destination, const char *source)
 {
 	/* TODO: Implement strcat(). */
     char *dst = destination;
-    for ( ; dst[0] != '\0' ; dst++ );
+    for ( ; dst[0] != '\0' ; dst++ ) {}
     for ( ; source[0] != '\0' ; dst++, source++) {
         dst[0] = source[0];
     }
@@ -39,8 +39,8 @@ char *strncat(char *destination, const char *source, size_t len)
 {
 	/* TODO: Implement strncat(). */
     char *dst = destination;
-    for ( ; dst[0] != '\0' ; dst++ );
-    for ( int i = 0 ; i < (int)len ; dst++, source++, i++) {
+    for ( ; dst[0] != '\0' ; dst++ ) {}
+    for ( int i = 0 ; i < (int)len ; dst++, source++, i++ ) {
         dst[0] = source[0];
     }
     dst[0] = '\0';
@@ -91,7 +91,7 @@ char *strrchr(const char *str, int c)
 {
 	/* TODO: Implement strrchr(). */
     char *start = (char*)str;
-    for ( ; str[0] != '\0' ; str++ );
+    for ( ; str[0] != '\0' ; str++ ) {}
     for ( ; str != start ; str-- ) {
         if ( str[0] == c )
             return (char*)str;
