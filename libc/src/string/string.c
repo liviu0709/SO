@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-
+#include <stdlib.h>
 #include <string.h>
 
 char *strcpy(char *destination, const char *source)
@@ -156,9 +156,8 @@ void *memcpy(void *destination, const void *source, size_t num)
 void *memmove(void *destination, const void *source, size_t num)
 {
 	/* TODO: Implement memmove(). */
-    // to be changed with malloc / free
     char *src = (char*)source;
-    char buf[num + 10];
+    char *buf = malloc(num + 1);
     for ( int i = 0 ; i < (int)num ; i++, src++ ) {
         buf[i] = src[0];
     }
@@ -166,6 +165,7 @@ void *memmove(void *destination, const void *source, size_t num)
     for ( int i = 0 ; i < (int)num ; i++, dst++ ) {
         dst[0] = buf[i];
     }
+    free(buf);
 	return destination;
 }
 
