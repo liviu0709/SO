@@ -44,23 +44,25 @@ struct statx {
 int fstatat_statx(int fd, const char *restrict path, struct stat *restrict st, int flag)
 {
 	/* TODO: Implement fstatat_statx(). Use statx and makedev above. */
-    fd = flag;
-    flag = fd;
-    char *ceva = (void*)path;
-
-    ceva = (void*)st;
-    ceva++;
-	return -1;
+    struct statx sol;
+    int ret = syscall(__NR_statx, fd, path, &sol, flag);
+    if ( ret == -1 )
+        return -1;
+    st->st_dev = makedev(sol.stx_dev_major, sol.stx_dev_minor);
+    st->st_rdev = makedev(sol.stx_rdev_major, sol.stx_rdev_minor);
+    st->st_ino = sol.stx_ino;
+    st->st_nlink = sol.stx_nlink;
+    st->st_blksize = sol.stx_blksize;
+    st->st_blocks = sol.stx_blocks;
+    st->st_mode = sol.stx_mode;
+    st->st_uid = sol.stx_uid;
+    st->st_gid = sol.stx_gid;
+    st->__pad0 = sol.pad1;
+	return 0;
 }
 
 int fstatat(int fd, const char *restrict path, struct stat *restrict st, int flag)
 {
 	/* TODO: Implement fstatat(). Use fstatat_statx(). */
-    puts("functie inutilaaaa");
-    fd = flag;
-    flag = fd;
-    char *ceva = (void*)path;
-    ceva = (void*)st;
-    ceva++;
-	return -1;
+	return fstatat_statx(fd, path, st, flag);
 }
