@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 typedef struct {
     long long size;
@@ -40,18 +41,33 @@ void *calloc(size_t nmemb, size_t size)
 void free(void *ptr)
 {
 	/* TODO: Implement free(). */
-    long long size = (long long)(ptr - sizeof(BlockSize));
-    munmap(ptr - sizeof(BlockSize), size);
+    BlockSize *data = ((BlockSize*)(((char*)ptr - sizeof(BlockSize))));
+    munmap(ptr - sizeof(BlockSize), data->size);
 }
 
 void *realloc(void *ptr, size_t size)
 {
+    BlockSize *data = ((BlockSize*)(((char*)ptr - sizeof(BlockSize))));
 	/* TODO: Implement realloc(). */
-	return NULL;
+    long long realSize = size + sizeof(BlockSize);
+    long long old = data->size;
+    BlockSize *ret = mmap(NULL, realSize , PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    memcpy(ret + sizeof(BlockSize), ptr, size);
+    munmap(ptr - sizeof(BlockSize), old);
+	ret->size = realSize;
+    return (void*)ret + sizeof(BlockSize);
 }
 
 void *reallocarray(void *ptr, size_t nmemb, size_t size)
 {
 	/* TODO: Implement reallocarray(). */
-	return NULL;
+    BlockSize *data = ((BlockSize*)(((char*)ptr - sizeof(BlockSize))));
+	/* TODO: Implement realloc(). */
+    long long realSize = size * nmemb + sizeof(BlockSize);
+    long long old = data->size;
+    BlockSize *ret = mmap(NULL, realSize , PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    memcpy(ret + sizeof(BlockSize), ptr, size * nmemb);
+    munmap(ptr - sizeof(BlockSize), old);
+	ret->size = realSize;
+    return (void*)ret + sizeof(BlockSize);
 }
