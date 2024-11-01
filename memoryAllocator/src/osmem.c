@@ -16,13 +16,16 @@
 struct block_meta *head = NULL;
 void *heapStart = NULL;
 
+int debug = 0;
+
 void *lfGudBlock(size_t size) {
     struct block_meta *current = head;
     while ( current != NULL ) {
+        printf("Checking block at %p with size %d\n", current, size);
         if ( current->status == STATUS_FREE && current->size >= size ) {
             return current;
         }
-        current = current->next;
+        current = current->prev;
     }
     return NULL;
 }
@@ -95,20 +98,24 @@ void *os_malloc(size_t size)
             struct block_meta *block = lfGudBlock(size);
             if ( block != NULL ) {
                 // Split the block for the size we need
-                struct block_meta *block2 = block + SIZE_T_SIZE + size;
-                block2->size = block->size - size - SIZE_T_SIZE;
-                block2->status = STATUS_FREE;
-                block2->prev = block;
-                block2->next = block->next;
-                block->size = size;
+                if ( block->size > size + SIZE_T_SIZE * 2 ) {
+                    struct block_meta *block2 = block + SIZE_T_SIZE + size;
+                    block2->size = block->size - size - SIZE_T_SIZE;
+                    block2->status = STATUS_FREE;
+                    block2->prev = block;
+                    block2->next = block->next;
+                    block->size = size;
+                    if ( block->next == NULL )
+                        head = block2;
+                    block->next = block2;
+                }
                 block->status = STATUS_ALLOC;
-                if ( block->next == NULL )
-                    head = block2;
-                block->next = block2;
-                ret = block + SIZE_T_SIZE;
+                ret = block;
+                ret += SIZE_T_SIZE;
                 printf("Allocated %ld bytes at %p\n", size, ret);
             } else {
-                printf("We fucked up...\n");
+                printf("We fucked up...%d\n", debug);
+                debug++;
                 // Get space for another block...
                 struct block_meta *block = sbrk(ALIGN(size + SIZE_T_SIZE));
                 // struct block_meta *block = sbrk(size);
@@ -131,6 +138,7 @@ void *os_malloc(size_t size)
 void os_free(void *ptr)
 {
 	/* TODO: Implement os_free */
+    printf("Free was called but idk man\n");
     if ( ptr == NULL ) {
         return;
     }
@@ -140,6 +148,7 @@ void os_free(void *ptr)
     } else {
         // To be modified
         // munmap(ptr - SIZE_T_SIZE, MMAP_THRESHOLD);
+        block->status = STATUS_FREE;
     }
 }
 
