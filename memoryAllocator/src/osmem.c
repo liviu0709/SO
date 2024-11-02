@@ -127,6 +127,29 @@ void *preAllocBrk(size_t size) {
     return ret;
 }
 
+void coalesce() {
+    struct block_meta *current = head;
+    while ( current != NULL ) {
+        if ( current->status == STATUS_FREE ) {
+            struct block_meta *next = current->prev;
+            if ( next != NULL ) {
+                if ( next->status == STATUS_FREE ) {
+                    current->size += next->size + SIZE_T_SIZE;
+                    current->prev = next->prev;
+                    if ( next->prev != NULL ) {
+                        next->prev->next = current;
+                    }
+                    printf("Coalescing blocks at %p and %p\n", current, next);
+                    // If theres more than 2 blocks to merge
+                    if ( current->next != NULL )
+                        current = current->next;
+                }
+            }
+        }
+        current = current->prev;
+    }
+}
+
 void *os_malloc(size_t size) {
     printf("Requested size: %zu\n", size);
     printf("Aligned size: %zu\n", ALIGN(size + SIZE_T_SIZE));
@@ -138,6 +161,9 @@ void *os_malloc(size_t size) {
         return allocMap(size);
     if ( heapStart == NULL )
         return preAllocBrk(size);
+
+    // Coalescing...
+    coalesce();
     // Find a free block with enough space
     struct block_meta *block = lfGudBlock(ALIGN(size));
     if ( block != NULL ) {
