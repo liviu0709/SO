@@ -2,11 +2,13 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <string.h>
 #include "osmem.h"
 #include "block_meta.h"
 
 #define MMAP_THRESHOLD		(128 * 1024)
 // ^^ Furat din test-utils.h ^^
+#define PAGE_SIZE (1024 * 4)
 
 #define ALIGNMENT 8 // must be a power of 2
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
@@ -17,6 +19,15 @@ struct block_meta *head = NULL;
 void *heapStart = NULL;
 
 int debug = 0;
+
+void removeBlock(struct block_meta *block) {
+    if ( head == block )
+        head = block->prev;
+    if ( block->prev != NULL )
+        block->prev->next = block->next;
+    if ( block->next != NULL )
+        block->next->prev = block->prev;
+}
 
 // Insert a block in the list sorted by address
 // Head is the lowest address
@@ -99,12 +110,12 @@ void *allocMap(size_t size) {
             adr->status = STATUS_MAPPED;
             head = adr;
         }
-        return blk + SIZE_T_SIZE;
+        return (char*)blk + SIZE_T_SIZE;
 }
 
 void *preAllocBrk(size_t size) {
     // Preallocating memory
-    printf("Preallocating memory\n");
+    printf("Preallocating memory in func\n");
     void *blk;
     char *ret;
     heapStart = sbrk(MMAP_THRESHOLD);
@@ -226,6 +237,7 @@ void os_free(void *ptr)
     }
     struct block_meta *block = ptr - SIZE_T_SIZE;
     if ( block->status == STATUS_MAPPED ) {
+        removeBlock(block);
         munmap(ptr - SIZE_T_SIZE, ALIGN(block->size + SIZE_T_SIZE));
     } else {
         // To be modified
@@ -237,7 +249,74 @@ void os_free(void *ptr)
 void *os_calloc(size_t nmemb, size_t size)
 {
 	/* TODO: Implement os_calloc */
-	return NULL;
+	if ( nmemb == 0 || size == 0 )
+        return NULL;
+    if ( PAGE_SIZE <= nmemb * size + SIZE_T_SIZE )
+        return allocMap(nmemb * size);
+    if ( heapStart == NULL ) {
+        printf("Preallocating memory\n");
+        char *ret = preAllocBrk(nmemb * size);
+        memset(ret, 0, size);
+        return ret;
+    }
+    // Copy pasted code soooo malloc go brrr
+    size = nmemb * size;
+    printf("Requested size: %zu\n", size);
+    char *ret;
+    // Coalescing...
+    coalesce();
+    // Find a free block with enough space
+    struct block_meta *block = lfGudBlock(ALIGN(size));
+    if ( block != NULL ) {
+        // Split the block for the size we need
+        printf("Calloc: Found a block at %p with size %d. I need %d\n", block, block->size, size);
+        if ( block->size >= size + SIZE_T_SIZE + 8 ) {
+            struct block_meta *block2 = (struct block_meta*)((char*)block + SIZE_T_SIZE + ALIGN(size));
+            printf("Splitting block at %p with size %d\n", block, size);
+            block2->size = block->size - ALIGN(size) - SIZE_T_SIZE;
+            block2->status = STATUS_FREE;
+            printf("Block2 at %p with size %d\n", block2, block2->size);
+            block->size = size;
+            insBlock(block2);
+        }
+        block->status = STATUS_ALLOC;
+        ret = (char*)block;
+        ret += SIZE_T_SIZE;
+        memset(ret, 0, size);
+        return ret;
+        // printf("Allocated %ld bytes at %p\n", size, ret);
+    } else {
+        // printf("We fucked up... or not? Lets expand a block%d\n", debug);
+        debug++;
+        // If the last block is free and small ...
+        // We can do one syscall and get more space:)
+        block = lfFreeBlockOnlyLast();
+        if ( block != NULL ) {
+            // Get moar space .. tbh no ideea how much
+            printf("Expanding block...from %d to %d\n", block->size, ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
+            char *blockP = (char*)block;
+            brk(blockP + ALIGN(size + SIZE_T_SIZE));
+            block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
+            block->status = STATUS_ALLOC;
+            ret = (char*) block + SIZE_T_SIZE;
+            memset(ret, 0, size);
+            return ret;
+        } else {
+            // Get space for another block...
+            printf("getting moarrr space... fake size: %d, Real size: %d\n", ALIGN(size + SIZE_T_SIZE), ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
+            struct block_meta *block = sbrk(ALIGN(size + SIZE_T_SIZE));
+            // lastBlock = block;
+            block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
+            block->status = STATUS_ALLOC;
+            insBlock(block);
+            ret = (char*)block + SIZE_T_SIZE;
+            printf("Allocated space at %p or %p\n", ret, (char*)block + SIZE_T_SIZE);
+            memset(ret, 0, size);
+            return ret;
+        }
+    }
+
+    return NULL;
 }
 
 void *os_realloc(void *ptr, size_t size)
