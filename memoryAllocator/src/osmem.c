@@ -215,6 +215,14 @@ void* expandBlock(struct block_meta *block, size_t size) {
     return (char*) block + SIZE_T_SIZE;
 }
 
+void mergeBlocks(struct block_meta *block, struct block_meta *next) {
+    block->size += next->size + SIZE_T_SIZE;
+    block->prev = next->prev;
+    if ( next->prev != NULL ) {
+        next->prev->next = block;
+    }
+}
+
 void* newBlock(size_t size) {
     // Get space for another block...
     // printf("getting moarrr space... fake size: %d, Real size: %d\n", ALIGN(size + SIZE_T_SIZE), ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
@@ -367,9 +375,7 @@ void *os_realloc(void *ptr, size_t size)
         os_free(ptr);
         return newBlock;
     }
-    // Another problem...
-    // block->status = STATUS_FREE;
-    coalesceRealloc(block);
+
     if ( block->size < size ) {
         // block->size = size;
         // Try expand block
@@ -390,12 +396,11 @@ void *os_realloc(void *ptr, size_t size)
                 // Expand block no more brk
                 // printf("REALLOC: Expanding block...from %d to %d\n", block->size, block->size + block->prev->size + SIZE_T_SIZE);
                 struct block_meta *next = block->prev;
-                block->prev = next->prev;
+                // block->prev = next->prev;
                 // if ( next->prev != NULL ) {
                 //     next->prev->next = block;
                 // }
-                // block = expandBlock(block, next->size + block->size);
-                block->size += next->size + SIZE_T_SIZE;
+                mergeBlocks(block, next);
                 // memset((char*)block + SIZE_T_SIZE + currentSpace, 0, next->size);
                 if ( block->size >= size ) {
                     break;
@@ -411,6 +416,9 @@ void *os_realloc(void *ptr, size_t size)
                         expandBlock(block, size);
                         return ptr;
                     }
+                    // Another problem...
+                // block->status = STATUS_FREE;
+                coalesceRealloc(block);
                 block->status = STATUS_ALLOC;
                 void *newBlock = os_malloc(size);
                 memcpy(newBlock, ptr, currentSpace);
