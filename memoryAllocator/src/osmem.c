@@ -161,6 +161,43 @@ void coalesce() {
     }
 }
 
+void* splitBlock(struct block_meta *block, size_t size) {
+    // Split the block for the size we need
+    printf("Malloc: Found a block at %p with size %d. I need %d\n", block, block->size, size);
+    if ( block->size >= size + SIZE_T_SIZE + 8 ) {
+        struct block_meta *block2 = (struct block_meta*)((char*)block + SIZE_T_SIZE + ALIGN(size));
+        printf("Splitting block at %p with size %d\n", block, size);
+        block2->size = block->size - ALIGN(size) - SIZE_T_SIZE;
+        block2->status = STATUS_FREE;
+        printf("Block2 at %p with size %d\n", block2, block2->size);
+        block->size = size;
+        insBlock(block2);
+    }
+    block->status = STATUS_ALLOC;
+    return (char*)block + SIZE_T_SIZE;
+}
+
+void* expandBlock(struct block_meta *block, size_t size) {
+    printf("Expanding block...from %d to %d\n", block->size, ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
+    char *blockP = (char*)block;
+    brk(blockP + ALIGN(size + SIZE_T_SIZE));
+    block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
+    block->status = STATUS_ALLOC;
+    return (char*) block + SIZE_T_SIZE;
+}
+
+void* newBlock(size_t size) {
+    // Get space for another block...
+    printf("getting moarrr space... fake size: %d, Real size: %d\n", ALIGN(size + SIZE_T_SIZE), ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
+    struct block_meta *block = sbrk(ALIGN(size + SIZE_T_SIZE));
+    // lastBlock = block;
+    block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
+    block->status = STATUS_ALLOC;
+    insBlock(block);
+    return (char*)block + SIZE_T_SIZE;
+    // printf("Allocated space at %p or %p\n", ret, (char*)block + SIZE_T_SIZE);
+}
+
 void *os_malloc(size_t size) {
     printf("Requested size: %zu\n", size);
     printf("Aligned size: %zu\n", ALIGN(size + SIZE_T_SIZE));
@@ -178,21 +215,7 @@ void *os_malloc(size_t size) {
     // Find a free block with enough space
     struct block_meta *block = lfGudBlock(ALIGN(size));
     if ( block != NULL ) {
-        // Split the block for the size we need
-        printf("Malloc: Found a block at %p with size %d. I need %d\n", block, block->size, size);
-        if ( block->size >= size + SIZE_T_SIZE + 8 ) {
-            struct block_meta *block2 = (struct block_meta*)((char*)block + SIZE_T_SIZE + ALIGN(size));
-            printf("Splitting block at %p with size %d\n", block, size);
-            block2->size = block->size - ALIGN(size) - SIZE_T_SIZE;
-            block2->status = STATUS_FREE;
-            printf("Block2 at %p with size %d\n", block2, block2->size);
-            block->size = size;
-            insBlock(block2);
-        }
-        block->status = STATUS_ALLOC;
-        ret = (char*)block;
-        ret += SIZE_T_SIZE;
-        return ret;
+        return splitBlock(block, size);
         // printf("Allocated %ld bytes at %p\n", size, ret);
     } else {
         // printf("We fucked up... or not? Lets expand a block%d\n", debug);
@@ -201,25 +224,9 @@ void *os_malloc(size_t size) {
         // We can do one syscall and get more space:)
         block = lfFreeBlockOnlyLast();
         if ( block != NULL ) {
-            // Get moar space .. tbh no ideea how much
-            printf("Expanding block...from %d to %d\n", block->size, ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
-            char *blockP = (char*)block;
-            brk(blockP + ALIGN(size + SIZE_T_SIZE));
-            block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
-            block->status = STATUS_ALLOC;
-            ret = (char*) block + SIZE_T_SIZE;
-            return ret;
+            return expandBlock(block, size);
         } else {
-            // Get space for another block...
-            printf("getting moarrr space... fake size: %d, Real size: %d\n", ALIGN(size + SIZE_T_SIZE), ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
-            struct block_meta *block = sbrk(ALIGN(size + SIZE_T_SIZE));
-            // lastBlock = block;
-            block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
-            block->status = STATUS_ALLOC;
-            insBlock(block);
-            ret = (char*)block + SIZE_T_SIZE;
-            printf("Allocated space at %p or %p\n", ret, (char*)block + SIZE_T_SIZE);
-            return ret;
+            return newBlock(size);
         }
     }
 
@@ -246,6 +253,7 @@ void os_free(void *ptr)
     }
 }
 
+
 void *os_calloc(size_t nmemb, size_t size)
 {
 	/* TODO: Implement os_calloc */
@@ -253,74 +261,52 @@ void *os_calloc(size_t nmemb, size_t size)
         return NULL;
     if ( PAGE_SIZE <= nmemb * size + SIZE_T_SIZE )
         return allocMap(nmemb * size);
-    if ( heapStart == NULL ) {
-        printf("Preallocating memory\n");
-        char *ret = preAllocBrk(nmemb * size);
-        memset(ret, 0, size);
-        return ret;
-    }
-    // Copy pasted code soooo malloc go brrr
-    size = nmemb * size;
-    printf("Requested size: %zu\n", size);
-    char *ret;
-    // Coalescing...
-    coalesce();
-    // Find a free block with enough space
-    struct block_meta *block = lfGudBlock(ALIGN(size));
-    if ( block != NULL ) {
-        // Split the block for the size we need
-        printf("Calloc: Found a block at %p with size %d. I need %d\n", block, block->size, size);
-        if ( block->size >= size + SIZE_T_SIZE + 8 ) {
-            struct block_meta *block2 = (struct block_meta*)((char*)block + SIZE_T_SIZE + ALIGN(size));
-            printf("Splitting block at %p with size %d\n", block, size);
-            block2->size = block->size - ALIGN(size) - SIZE_T_SIZE;
-            block2->status = STATUS_FREE;
-            printf("Block2 at %p with size %d\n", block2, block2->size);
-            block->size = size;
-            insBlock(block2);
-        }
-        block->status = STATUS_ALLOC;
-        ret = (char*)block;
-        ret += SIZE_T_SIZE;
-        memset(ret, 0, size);
-        return ret;
-        // printf("Allocated %ld bytes at %p\n", size, ret);
-    } else {
-        // printf("We fucked up... or not? Lets expand a block%d\n", debug);
-        debug++;
-        // If the last block is free and small ...
-        // We can do one syscall and get more space:)
-        block = lfFreeBlockOnlyLast();
-        if ( block != NULL ) {
-            // Get moar space .. tbh no ideea how much
-            printf("Expanding block...from %d to %d\n", block->size, ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
-            char *blockP = (char*)block;
-            brk(blockP + ALIGN(size + SIZE_T_SIZE));
-            block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
-            block->status = STATUS_ALLOC;
-            ret = (char*) block + SIZE_T_SIZE;
-            memset(ret, 0, size);
-            return ret;
-        } else {
-            // Get space for another block...
-            printf("getting moarrr space... fake size: %d, Real size: %d\n", ALIGN(size + SIZE_T_SIZE), ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
-            struct block_meta *block = sbrk(ALIGN(size + SIZE_T_SIZE));
-            // lastBlock = block;
-            block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
-            block->status = STATUS_ALLOC;
-            insBlock(block);
-            ret = (char*)block + SIZE_T_SIZE;
-            printf("Allocated space at %p or %p\n", ret, (char*)block + SIZE_T_SIZE);
-            memset(ret, 0, size);
-            return ret;
-        }
-    }
+    char *ret = os_malloc(nmemb * size);
+    memset(ret, 0, size * nmemb);
+    return ret;
+}
 
-    return NULL;
+int checkPrevBlock(struct block_meta* block) {
+    block = block->prev;
+    if ( block->status != STATUS_FREE )
+        return 1;
+    return 0;
 }
 
 void *os_realloc(void *ptr, size_t size)
 {
 	/* TODO: Implement os_realloc */
+    if ( size == 0 )
+        os_free(ptr);
+    if ( ptr == NULL )
+        return os_malloc(size);
+    struct block_meta *block = ptr - SIZE_T_SIZE;
+    if ( block->size < size ) {
+        // block->size = size;
+        // Try expand block
+        int currentSpace = block->size;
+        int unlucky = 0;
+        while(1) {
+            if ( (block->prev == NULL) || (block->prev->status != STATUS_FREE) ) {
+                // Get new block
+                unlucky = 1;
+                break;
+            } else {
+                struct block_meta *next = block->prev;
+                block->prev = next->prev;
+                block = expandBlock(block, next->size + block->size);
+                if ( block->size >= size ) {
+                    break;
+                }
+            }
+        }
+        if ( unlucky ) {
+            // Get new block
+            void *newBlock = os_malloc(size);
+            memcpy(newBlock, ptr, currentSpace);
+            os_free(ptr);
+            return newBlock;
+        }
+    }
 	return NULL;
 }
