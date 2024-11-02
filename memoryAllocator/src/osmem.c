@@ -16,88 +16,44 @@
 struct block_meta *head = NULL;
 void *heapStart = NULL;
 
-struct block_meta *lastBlock = NULL;
-
 int debug = 0;
 
-void* getHighestAddress() {
-    struct block_meta *current = head;
-    char* highest = NULL;
-    char* best = head;
-    while ( current != NULL ) {
-        // printf("Checking block at %p with size %d and status %d\n", current, current->size, current->status);
-        if ( current->status == STATUS_FREE ) {
-            highest = current;
-        }
-        if ( current > best ) {
-            best = current;
-        }
-        current = current->prev;
-    }
-    if ( highest == NULL )
-        return NULL;
-    current = head;
-    while ( current != NULL ) {
-        if ( current->status == STATUS_FREE && current > highest ) {
-            highest = current;
-        }
-        current = current->prev;
-    }
-    // printf("Highest address is %p, best is %p\n", highest, best);
-    if ( best == highest )
-        return highest;
-    return NULL;
-}
-
+// Insert a block in the list sorted by address
+// Head is the lowest address
 void insBlock(struct block_meta *block) {
-    // Insert the block sorted by address
     if ( head == NULL ) {
         head = block;
-        head->next = NULL;
-        head->prev = NULL;
+        block->next = NULL;
+        block->prev = NULL;
     } else {
-        struct block_meta *current = head;
-        while ( current != NULL ) {
-            if ( current < block ) {
-                block->next = current;
-                block->prev = current->prev;
-                current->prev = block;
+        struct block_meta *curent = head, *ant = NULL;
+        while ( curent != NULL ) {
+            if ( curent > block ) {
+                block->prev = curent;
+                block->next = curent->next;
+                if ( ant != NULL ) {
+                    ant->prev = block;
+                } else {
+                    head = block;
+                }
+                curent->next = block;
                 return;
             }
-            current = current->next;
+            ant = curent;
+            curent = curent->prev;
         }
-        head->next = block;
-        block->prev = head;
-        block->next = NULL;
-        head = block;
+        curent = ant;
+        curent->prev = block;
+        block->next = curent;
+        block->prev = NULL;
     }
 }
 
+
+// Find free block with enough space
 void *lfGudBlock(size_t size) {
     struct block_meta *current = head;
-    int i = 0;
-    // while ( current != NULL ) {
-    //     printf("Checking block at %p with size %d\n", current, current->size);
-    //     if ( current->status == STATUS_FREE && current->size >= size ) {
-    //         printf("lf: Found a block at %p with size %d for %d\n", current, current->size, size);
-    //     }
-    //     current = current->next;
-    //     i++;
-    // }
-    // printf("Checked %d blocks on next\n", i);
-    // i = 0;
-    // current = head;
-    // while ( current != NULL ) {
-    //     printf("Checking block at %p with size %d\n", current, current->size);
-    //     if ( current->status == STATUS_FREE && current->size >= size ) {
-    //         printf("lf: Found a block at %p with size %d for %d\n", current, current->size, size);
-    //     }
-    //     current = current->prev;
-    //     i++;
-    // }
-    // printf("Checked %d blocks on prev\n", i);
-    current = head;
-
+    // First block with enough space works for now
     while ( current != NULL ) {
         // printf("Checking block at %p with size %d\n", current, current->size);
         if ( current->status == STATUS_FREE && current->size >= size ) {
@@ -111,6 +67,8 @@ void *lfGudBlock(size_t size) {
 
 void *lfFreeBlockOnlyLast() {
     struct block_meta *current = head;
+    // We want the highest address ...
+    // So we go all the way to the end
     while ( current->prev != NULL ) {
         current = current->prev;
     }
@@ -154,20 +112,6 @@ void *preAllocBrk(size_t size) {
     struct block_meta *block = blk;
     block->size = ALIGN(size);
     block->status = STATUS_ALLOC;
-    // if ( head == NULL ) {
-    //     head = block;
-    //     head->next = NULL;
-    //     head->prev = NULL;
-    //     // head->status = STATUS_ALLOC;
-    //     // head->size = size;
-    // } else {
-    //     head->next = block;
-    //     block->prev = head;
-    //     block->next = NULL;
-    //     // block->status = STATUS_ALLOC;
-    //     // block->size = size;
-    //     head = block;
-    // }
     insBlock(block);
     ret = (char*)blk + SIZE_T_SIZE;
     // Make a new block with the remaining memory
@@ -178,10 +122,6 @@ void *preAllocBrk(size_t size) {
         struct block_meta *block2 = blk;
         block2->size = MMAP_THRESHOLD - size - SIZE_T_SIZE * 2;
         block2->status = STATUS_FREE;
-        // block2->prev = head;
-        // block2->next = NULL;
-        // head->next = block2;
-        // head = block2;
         insBlock(block2);
     }
     return ret;
@@ -204,22 +144,13 @@ void *os_malloc(size_t size) {
         // Split the block for the size we need
         printf("Malloc: Found a block at %p with size %d. I need %d\n", block, block->size, size);
         if ( block->size >= size + SIZE_T_SIZE + 8 ) {
-            struct block_meta *block2 = (char*)block + SIZE_T_SIZE + ALIGN(size);
+            struct block_meta *block2 = (struct block_meta*)((char*)block + SIZE_T_SIZE + ALIGN(size));
             printf("Splitting block at %p with size %d\n", block, size);
             block2->size = block->size - ALIGN(size) - SIZE_T_SIZE;
             block2->status = STATUS_FREE;
-            // block2->prev = block;
-            // block2->next = block->next;
-
             printf("Block2 at %p with size %d\n", block2, block2->size);
             block->size = size;
-            printf("Head is at %p and has size %d\n", head, head->size);
-
-            // head = block2;
-            printf("Head is now %p\n", head);
             insBlock(block2);
-
-            block->next = block2;
         }
         block->status = STATUS_ALLOC;
         ret = (char*)block;
@@ -232,16 +163,6 @@ void *os_malloc(size_t size) {
         // If the last block is free and small ...
         // We can do one syscall and get more space:)
         block = lfFreeBlockOnlyLast();
-        if ( lastBlock ) {
-            if ( lastBlock->status == STATUS_FREE )
-                block = lastBlock;
-            else {
-                block = NULL;
-            }
-        }
-        // printf("Block before funny func: %p\n", block);
-        block = getHighestAddress();
-        // printf("Block after funny func: %p\n", block);
         if ( block != NULL ) {
             // Get moar space .. tbh no ideea how much
             printf("Expanding block...from %d to %d\n", block->size, ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
@@ -255,21 +176,13 @@ void *os_malloc(size_t size) {
             // Get space for another block...
             printf("getting moarrr space... fake size: %d, Real size: %d\n", ALIGN(size + SIZE_T_SIZE), ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
             struct block_meta *block = sbrk(ALIGN(size + SIZE_T_SIZE));
-            lastBlock = block;
-            // struct block_meta *block = sbrk(size);
-            // block->prev = head;
+            // lastBlock = block;
             block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
             block->status = STATUS_ALLOC;
-            // head->next = block;
-            // block->next = NULL;
             insBlock(block);
             ret = (char*)block + SIZE_T_SIZE;
-            // Pointer aritmetic sucks...
-            // ret += SIZE_T_SIZE;
-            // head = block;
             printf("Allocated space at %p or %p\n", ret, (char*)block + SIZE_T_SIZE);
             return ret;
-            // ret = block;
         }
     }
 
