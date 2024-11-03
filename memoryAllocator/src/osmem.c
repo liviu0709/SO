@@ -199,10 +199,10 @@ void* splitBlock(struct block_meta *block, size_t size) {
     // printf("Malloc: Found a block at %p with size %d. I need %d\n", block, block->size, size);
     if ( block->size >= size + SIZE_T_SIZE + 8 ) {
         struct block_meta *block2 = (struct block_meta*)((char*)block + SIZE_T_SIZE + ALIGN(size));
-        // printf("Splitting block at %p with size %d\n", block, size);
+        printf("Splitting block at %p with size %d\n", block, size);
         block2->size = block->size - ALIGN(size) - SIZE_T_SIZE;
         block2->status = STATUS_FREE;
-        // printf("Block2 at %p with size %d\n", block2, block2->size);
+        printf("Block2 at %p with size %d\n", block2, block2->size);
         block->size = ALIGN(size);
         insBlock(block2);
     }
@@ -384,7 +384,7 @@ void *os_realloc(void *ptr, size_t size)
         os_free(ptr);
         return newBlock;
     }
-    coalesceRealloc(block);
+    // coalesceRealloc(block);
     if ( block->size < size ) {
         // block->size = size;
         // Try expand block
@@ -420,7 +420,7 @@ void *os_realloc(void *ptr, size_t size)
                 // Get new block
                 // printf("REALLOC: Getting moarrr space... fake size: %d, Real size: %d\n", ALIGN(size + SIZE_T_SIZE), ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
                 // If its the last block on heap, we can expand it
-                coalesceRealloc(block);
+                // coalesceRealloc(block);
                 if ( block == current ) {
                         block->status = STATUS_ALLOC;
                         return expandBlock(block, size);
@@ -436,9 +436,27 @@ void *os_realloc(void *ptr, size_t size)
                 // }
                 // splitBlock(sol, size);
                 // block->status = STATUS_ALLOC;
+
+                // Before malloc, lets check the block with the lower address
+                // Maybe its free and we can use it
+                // struct block_meta *next = block->next;
+                // if ( next != NULL && next->status == STATUS_FREE ) {
+                //     if ( next->size + SIZE_T_SIZE + block->size >= size ) {
+                //         next->size += block->size + SIZE_T_SIZE;
+                //         next->prev = block->prev;
+                //         if ( block->prev != NULL ) {
+                //             block->prev->next = next;
+                //         }
+                //         memcpy((char*)next + SIZE_T_SIZE, ptr, currentSpace);
+                //         splitBlock(next, size);
+                //         next->status = STATUS_ALLOC;
+                //         return ptr;
+                //     }
+                // }
+
                 void *sol = os_malloc(size);
                 // void *newBloc = newBlock(size);
-
+                block->status = STATUS_FREE;
                 memcpy(sol, ptr, currentSpace);
                 os_free(ptr);
                 return sol;
@@ -466,6 +484,7 @@ void *os_realloc(void *ptr, size_t size)
         // Apparently we just do nothing ???
         // how about we split the block?
         // splitBlock(block, size);
+        coalesceRealloc(block);
         int best = getSmallestFree(block);
 
         // printf("Best: %d, toBeFreed: %d\n", best, toBeFreed);
