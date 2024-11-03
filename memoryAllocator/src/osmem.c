@@ -20,17 +20,6 @@ void *heapStart = NULL;
 void *heapEnd = NULL;
 void *spaceUsed = NULL;
 
-int debug = 0;
-
-void listHeap() {
-    struct block_meta *current = head;
-    while ( current != NULL ) {
-        printf("Block at %p with size %d and status %d\n", current, current->size, current->status);
-        current = current->prev;
-    }
-    printf("End of heap\n");
-}
-
 void removeBlock(struct block_meta *block) {
     if ( head == block )
         head = block->prev;
@@ -75,14 +64,16 @@ void insBlock(struct block_meta *block) {
 // Find free block with enough space
 void *lfGudBlock(size_t size) {
     struct block_meta *current = head;
-    int diff = -1;
+    size_t diff;
+    int first = 1;
     // First block with enough space works for now
     while ( current != NULL ) {
         // printf("Checking block at %p with size %d\n", current, current->size);
         // instead of getting the first block, get best fit
         if ( current->status == STATUS_FREE && current->size >= size ) {
             // printf("lf: Found a block at %p with size %d for %d\n", current, current->size, size);
-            if ( diff == -1 ) {
+            if ( first == 1 ) {
+                first = 0;
                 diff = current->size - size;
             } else {
                 if ( current->size - size < diff ) {
@@ -99,7 +90,6 @@ void *lfGudBlock(size_t size) {
         // instead of getting the first block, get best fit
         if ( current->status == STATUS_FREE && current->size >= size && current->size - size <= diff ) {
             // printf("lf: Found a block at %p with size %d for %d\n", current, current->size, size);
-            // diff = current->size - size;
             return current;
         }
         current = current->prev;
@@ -158,16 +148,6 @@ void *preAllocBrk(size_t size) {
     block->status = STATUS_ALLOC;
     insBlock(block);
     ret = (char*)blk + SIZE_T_SIZE;
-    // Make a new block with the remaining memory
-    // Check first if there is enough space for a new block
-    // if ( (int)(MMAP_THRESHOLD - ALIGN(size) - SIZE_T_SIZE * 2) >= 0 ) {
-    //     // printf("Creating a new block with size at first brk%d\n", MMAP_THRESHOLD - ALIGN(size) - SIZE_T_SIZE * 2);
-    //     blk += SIZE_T_SIZE + size;
-    //     struct block_meta *block2 = blk;
-    //     block2->size = MMAP_THRESHOLD - size - SIZE_T_SIZE * 2;
-    //     block2->status = STATUS_FREE;
-    //     insBlock(block2);
-    // }
     return ret;
 }
 
@@ -233,7 +213,6 @@ void* newBlock(size_t size) {
     // Get space for another block...
     // printf("getting moarrr space... fake size: %d, Real size: %d\n", ALIGN(size + SIZE_T_SIZE), ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
     struct block_meta *block = sbrk(ALIGN(size + SIZE_T_SIZE));
-    // lastBlock = block;
     heapEnd += ALIGN(size + SIZE_T_SIZE);
     spaceUsed += ALIGN(size + SIZE_T_SIZE);
     block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
@@ -244,12 +223,6 @@ void* newBlock(size_t size) {
 }
 
 void *os_malloc(size_t size) {
-    // printf("Requested size: %zu\n", size);
-    // printf("Aligned size: %zu\n", ALIGN(size + SIZE_T_SIZE));
-
-    // if ( size = 5120 )
-        // listHeap();
-
     char *ret;
     if ( size == 0 )
         return NULL;
@@ -257,7 +230,6 @@ void *os_malloc(size_t size) {
         return allocMap(size);
     if ( heapStart == NULL )
         return preAllocBrk(size);
-
     // Coalescing...
     coalesce();
     // Find a free block with enough space
@@ -266,8 +238,6 @@ void *os_malloc(size_t size) {
         return splitBlock(block, size);
         // printf("Allocated %ld bytes at %p\n", size, ret);
     } else {
-        // printf("We fucked up... or not? Lets expand a block%d\n", debug);
-        debug++;
         // If the last block is free and small ...
         // We can do one syscall and get more space:)
         block = lfFreeBlockOnlyLast();
@@ -277,7 +247,6 @@ void *os_malloc(size_t size) {
             return newBlock(size);
         }
     }
-
     // printf("allocated space at %p\n", ret);
     return ret;
 
@@ -285,18 +254,15 @@ void *os_malloc(size_t size) {
 
 void os_free(void *ptr)
 {
-	/* TODO: Implement os_free */
-    if ( ptr == NULL ) {
+    if ( ptr == NULL )
         return;
-    }
     struct block_meta *block = ptr - SIZE_T_SIZE;
     // printf("Free was called but idk man for block %p with %zu\n", block, block->size);
     if ( block->status == STATUS_MAPPED ) {
         removeBlock(block);
         munmap(ptr - SIZE_T_SIZE, ALIGN(block->size + SIZE_T_SIZE));
     } else {
-        // To be modified
-        // munmap(ptr - SIZE_T_SIZE, MMAP_THRESHOLD);
+        // Simply mark block as free
         block->status = STATUS_FREE;
     }
 }
@@ -304,7 +270,6 @@ void os_free(void *ptr)
 
 void *os_calloc(size_t nmemb, size_t size)
 {
-	/* TODO: Implement os_calloc */
 	if ( nmemb == 0 || size == 0 )
         return NULL;
     if ( PAGE_SIZE <= nmemb * size + SIZE_T_SIZE )
@@ -316,7 +281,7 @@ void *os_calloc(size_t nmemb, size_t size)
 
 int getSmallestFree(struct block_meta *block) {
     struct block_meta *current = block->next;
-    int min = 0;
+    size_t min = 0;
     while ( current != NULL ) {
         if ( current->status == STATUS_FREE && current != block ) {
             if ( min == 0 ) {
@@ -379,14 +344,11 @@ void *os_realloc(void *ptr, size_t size)
     }
     if ( size > MMAP_THRESHOLD ) {
         void *newBlock = os_malloc(size);
-        struct block_meta *block2 = newBlock - SIZE_T_SIZE;
         memcpy(newBlock, ptr, block->size);
         os_free(ptr);
         return newBlock;
     }
-    // coalesceRealloc(block);
     if ( block->size < size ) {
-        // block->size = size;
         // Try expand block
         int currentSpace = block->size;
         int unlucky = 0;
@@ -405,12 +367,7 @@ void *os_realloc(void *ptr, size_t size)
                 // Expand block no more brk
                 // printf("REALLOC: Expanding block...from %d to %d\n", block->size, block->size + block->prev->size + SIZE_T_SIZE);
                 struct block_meta *next = block->prev;
-                // block->prev = next->prev;
-                // if ( next->prev != NULL ) {
-                //     next->prev->next = block;
-                // }
                 mergeBlocks(block, next);
-                // memset((char*)block + SIZE_T_SIZE + currentSpace, 0, next->size);
                 if ( block->size >= size ) {
                     break;
                 }
@@ -420,47 +377,17 @@ void *os_realloc(void *ptr, size_t size)
                 // Get new block
                 // printf("REALLOC: Getting moarrr space... fake size: %d, Real size: %d\n", ALIGN(size + SIZE_T_SIZE), ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
                 // If its the last block on heap, we can expand it
-                // coalesceRealloc(block);
                 if ( block == current ) {
                         block->status = STATUS_ALLOC;
                         return expandBlock(block, size);
                         return ptr;
                     }
-                    // Another problem...
-                    // void *sol;
-                // block->status = STATUS_FREE;
-                // void *sol = lfGudBlock(size);
-                // if ( sol != NULL ) {
-                //     // printf("REALLOC: Found a block at %p with size %d for %d\n", sol, sol->size, size);
-                //     sol = newBlock(size);
-                // }
-                // splitBlock(sol, size);
-                // block->status = STATUS_ALLOC;
-
-                // Before malloc, lets check the block with the lower address
-                // Maybe its free and we can use it
-                // struct block_meta *next = block->next;
-                // if ( next != NULL && next->status == STATUS_FREE ) {
-                //     if ( next->size + SIZE_T_SIZE + block->size >= size ) {
-                //         next->size += block->size + SIZE_T_SIZE;
-                //         next->prev = block->prev;
-                //         if ( block->prev != NULL ) {
-                //             block->prev->next = next;
-                //         }
-                //         memcpy((char*)next + SIZE_T_SIZE, ptr, currentSpace);
-                //         splitBlock(next, size);
-                //         next->status = STATUS_ALLOC;
-                //         return ptr;
-                //     }
-                // }
 
                 void *sol = os_malloc(size);
-                // void *newBloc = newBlock(size);
                 block->status = STATUS_FREE;
                 memcpy(sol, ptr, currentSpace);
                 os_free(ptr);
                 return sol;
-
         } else {
             int best = getSmallestFree(block);
             int toBeFreed = block->size - size;
@@ -471,22 +398,10 @@ void *os_realloc(void *ptr, size_t size)
             return ptr;
         }
     } else {
-        // Try to split the block
-        // void *newBlock = splitBlock(block, size);
-        // struct block_meta *block2 = newBlock - SIZE_T_SIZE;
-        // memcpy(newBlock, ptr, block2->size);
-        // return splitBlock(block, size);
-        // return newBlock;
         // Truncate the block
         int toBeFreed = block->size - size;
-        // block->size = size;
-        // munmap(ptr + size, toBeFreed);
-        // Apparently we just do nothing ???
-        // how about we split the block?
-        // splitBlock(block, size);
         coalesceRealloc(block);
         int best = getSmallestFree(block);
-
         // printf("Best: %d, toBeFreed: %d\n", best, toBeFreed);
         if ( best <= toBeFreed ) {
             splitBlock(block, size);
