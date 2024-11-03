@@ -20,6 +20,8 @@ void *heapStart = NULL;
 void *heapEnd = NULL;
 void *spaceUsed = NULL;
 
+int preAlloc = 0;
+
 void removeBlock(struct block_meta *block) {
     if ( head == block )
         head = block->prev;
@@ -101,13 +103,24 @@ void *lfFreeBlockOnlyLast() {
     struct block_meta *current = head;
     // We want the highest address ...
     // So we go all the way to the end
+    // From heap... cause mmap useless
     while ( current->prev != NULL ) {
         current = current->prev;
     }
+
         if ( current->status == STATUS_FREE ) {
             return current;
         } else {
-            return NULL;
+            // return NULL;
+            // Maybe we in the map area...
+            while ( current->status == STATUS_MAPPED ) {
+                current = current->next;
+            }
+            if ( current->status == STATUS_FREE ) {
+                return current;
+            } else {
+                return NULL;
+            }
         }
     return NULL;
 }
@@ -117,39 +130,26 @@ void *allocMap(size_t size) {
     void *blk = mmap(NULL, ALIGN(size + SIZE_T_SIZE),
         PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         struct block_meta *adr = blk;
-        if ( head == NULL ) {
-            head = adr;
-            head->next = NULL;
-            head->prev = NULL;
-            head->size = size;
-            head->status = STATUS_MAPPED;
-        } else {
-            head->next = adr;
-            adr->prev = head;
-            adr->next = NULL;
-            adr->size = size;
-            adr->status = STATUS_MAPPED;
-            head = adr;
-        }
+        adr->size = size;
+        adr->status = STATUS_MAPPED;
+        insBlock(adr);
+        // if ( head == NULL ) {
+        //     head = adr;
+        //     head->next = NULL;
+        //     head->prev = NULL;
+        //     head->size = size;
+        //     head->status = STATUS_MAPPED;
+        // } else {
+        //     head->next = adr;
+        //     adr->prev = head;
+        //     adr->next = NULL;
+        //     adr->size = size;
+        //     adr->status = STATUS_MAPPED;
+        //     head = adr;
+        // }
         return (char*)blk + SIZE_T_SIZE;
 }
 
-void *preAllocBrk(size_t size) {
-    // Preallocating memory
-    // printf("Preallocating memory in func\n");
-    void *blk;
-    char *ret;
-    heapStart = sbrk(MMAP_THRESHOLD);
-    blk = heapStart;
-    heapEnd = blk + MMAP_THRESHOLD;
-    spaceUsed = blk;
-    struct block_meta *block = blk;
-    block->size = ALIGN(size);
-    block->status = STATUS_ALLOC;
-    insBlock(block);
-    ret = (char*)blk + SIZE_T_SIZE;
-    return ret;
-}
 
 void coalesce() {
     struct block_meta *current = head;
@@ -179,10 +179,10 @@ void* splitBlock(struct block_meta *block, size_t size) {
     // printf("Malloc: Found a block at %p with size %d. I need %d\n", block, block->size, size);
     if ( block->size >= size + SIZE_T_SIZE + 8 ) {
         struct block_meta *block2 = (struct block_meta*)((char*)block + SIZE_T_SIZE + ALIGN(size));
-        printf("Splitting block at %p with size %d\n", block, size);
+        // printf("Splitting block at %p with size %d\n", block, size);
         block2->size = block->size - ALIGN(size) - SIZE_T_SIZE;
         block2->status = STATUS_FREE;
-        printf("Block2 at %p with size %d\n", block2, block2->size);
+        // printf("Block2 at %p with size %d\n", block2, block2->size);
         block->size = ALIGN(size);
         insBlock(block2);
     }
@@ -190,15 +190,24 @@ void* splitBlock(struct block_meta *block, size_t size) {
     return (char*)block + SIZE_T_SIZE;
 }
 
-void* expandBlock(struct block_meta *block, size_t size) {
-    // printf("Expanding block...from %d to %d\n", block->size, ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
-    char *blockP = (char*)block;
-    brk(blockP + ALIGN(size + SIZE_T_SIZE));
-    heapEnd = blockP + ALIGN(size + SIZE_T_SIZE);
-    spaceUsed += ALIGN(size - block->size + SIZE_T_SIZE);
-    block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
+void *preAllocBrk(size_t size) {
+    // Preallocating memory
+    printf("Preallocating memory in func\n");
+    void *blk;
+    char *ret;
+    heapStart = sbrk(MMAP_THRESHOLD);
+    if ( size != 131032 )
+        preAlloc = 1;
+    blk = heapStart;
+    heapEnd = blk + MMAP_THRESHOLD;
+    spaceUsed = (char*)blk + SIZE_T_SIZE + size;
+    struct block_meta *block = blk;
+    block->size = ALIGN(MMAP_THRESHOLD - SIZE_T_SIZE);
     block->status = STATUS_ALLOC;
-    return (char*) block + SIZE_T_SIZE;
+    splitBlock(block, size);
+    insBlock(block);
+    ret = (char*)blk + SIZE_T_SIZE;
+    return ret;
 }
 
 void mergeBlocks(struct block_meta *block, struct block_meta *next) {
@@ -209,12 +218,36 @@ void mergeBlocks(struct block_meta *block, struct block_meta *next) {
     }
 }
 
+void* expandBlock(struct block_meta *block, size_t size) {
+    // printf("Expanding block...from %d to %d\n", block->size, ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
+    char *blockP = (char*)block;
+    brk(blockP + ALIGN(size + SIZE_T_SIZE));
+    heapEnd = blockP + ALIGN(size + SIZE_T_SIZE);
+    spaceUsed += ALIGN(size - block->size + SIZE_T_SIZE);
+    // printf("Heap end at %p. Current space used: %p\n", heapEnd, spaceUsed);
+    block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
+    block->status = STATUS_ALLOC;
+    return (char*) block + SIZE_T_SIZE;
+}
+
+
 void* newBlock(size_t size) {
     // Get space for another block...
     // printf("getting moarrr space... fake size: %d, Real size: %d\n", ALIGN(size + SIZE_T_SIZE), ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE);
-    struct block_meta *block = sbrk(ALIGN(size + SIZE_T_SIZE));
-    heapEnd += ALIGN(size + SIZE_T_SIZE);
-    spaceUsed += ALIGN(size + SIZE_T_SIZE);
+    struct block_meta *block;
+    // if ( head + SIZE_T_SIZE + head->size + size <= heapEnd && preAlloc == 1 ) {
+    //     block = head;
+    //     char *arit = (char*)head;
+    //     arit += sizeof(struct block_meta) + head->size;
+    //     block = (struct block_meta*)arit;
+    //     spaceUsed += ALIGN(size + SIZE_T_SIZE);
+    //     printf("Heap end at %p. Current space used: %p\n", heapEnd, spaceUsed);
+    // } else {
+        block = sbrk(ALIGN(size + SIZE_T_SIZE));
+        heapEnd += ALIGN(size + SIZE_T_SIZE);
+        spaceUsed += ALIGN(size + SIZE_T_SIZE);
+        // printf("Heap end at %p. Current space used: %p\n", heapEnd, spaceUsed);
+    // }
     block->size = ALIGN(size + SIZE_T_SIZE) - SIZE_T_SIZE;
     block->status = STATUS_ALLOC;
     insBlock(block);
@@ -259,8 +292,9 @@ void os_free(void *ptr)
     struct block_meta *block = ptr - SIZE_T_SIZE;
     // printf("Free was called but idk man for block %p with %zu\n", block, block->size);
     if ( block->status == STATUS_MAPPED ) {
+        size_t size = block->size;
         removeBlock(block);
-        munmap(ptr - SIZE_T_SIZE, ALIGN(block->size + SIZE_T_SIZE));
+        munmap(ptr - SIZE_T_SIZE, ALIGN(size + SIZE_T_SIZE));
     } else {
         // Simply mark block as free
         block->status = STATUS_FREE;
@@ -309,7 +343,7 @@ void coalesceRealloc(struct block_meta* block) {
                         if ( next->prev != NULL ) {
                             next->prev->next = current;
                         }
-                        printf("Coalescing blocks at %p and %p\n", current, next);
+                        // printf("Coalescing blocks at %p and %p\n", current, next);
                         // printf("Coalescing blocks at %p and %p\n", current, next);
                         // If theres more than 2 blocks to merge
                         if ( current->next != NULL )
@@ -321,10 +355,26 @@ void coalesceRealloc(struct block_meta* block) {
         }
 }
 
+int contiguousBlocks(struct block_meta *block, struct block_meta *block2) {
+    if ( block == NULL )
+        return 0;
+    if ( block->next == block2 ) {
+        return 1;
+    }
+    return 0;
+}
+
+int debug;
+
 void *os_realloc(void *ptr, size_t size)
 {
+    if ( size == 47249 ) {
+        printf("Reallocating %p to %d\n", ptr, size);
+        debug++;
+        printf("Debug: %d\n", debug);
+    }
     // listHeap();
-	printf("Reallocating %p to %d\n", ptr, size);
+	// printf("Reallocating %p to %d\n", ptr, size);
     if ( size == 0 ) {
         os_free(ptr);
         return NULL;
@@ -350,6 +400,9 @@ void *os_realloc(void *ptr, size_t size)
     }
     if ( block->size < size ) {
         // Try expand block
+
+
+
         int currentSpace = block->size;
         int unlucky = 0;
         struct block_meta *current = head;
@@ -405,7 +458,7 @@ void *os_realloc(void *ptr, size_t size)
         // printf("Best: %d, toBeFreed: %d\n", best, toBeFreed);
         if ( best <= toBeFreed ) {
             splitBlock(block, size);
-            printf("Splitting block\n");
+            // printf("Splitting block\n");
         }
         block->status = STATUS_ALLOC;
         return ptr;
