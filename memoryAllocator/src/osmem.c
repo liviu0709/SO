@@ -120,30 +120,6 @@ void *allocMap(size_t size)
 	return (char *)blk + SIZE_T_SIZE;
 }
 
-void coalesce(void)
-{
-	struct block_meta *current = head;
-
-	while (current != NULL) {
-		if (current->status == STATUS_FREE) {
-			struct block_meta *next = current->prev;
-
-			if (next != NULL) {
-				if (next->status == STATUS_FREE) {
-					current->size += next->size + SIZE_T_SIZE;
-					current->prev = next->prev;
-					if (next->prev != NULL)
-						next->prev->next = current;
-					// If theres more than 2 blocks to merge
-					if (current->next != NULL)
-						current = current->next;
-				}
-			}
-		}
-		current = current->prev;
-	}
-}
-
 void *splitBlock(struct block_meta *block, size_t size)
 {
 	// Split the block for the size we need
@@ -204,6 +180,30 @@ void *newBlock(size_t size)
 	return (char *)block + SIZE_T_SIZE;
 }
 
+void coalesce(struct block_meta *block)
+{
+	struct block_meta *current = head;
+
+	while (current != NULL) {
+		if (current->status == STATUS_FREE || current == block) {
+			struct block_meta *next = current->prev;
+
+			if (next != NULL && next != block) {
+				if (next->status == STATUS_FREE) {
+					current->size += ALIGN(next->size) + SIZE_T_SIZE;
+					current->prev = next->prev;
+					if (next->prev != NULL)
+						next->prev->next = current;
+					// If theres more than 2 blocks to merge
+					if (current->next != NULL)
+						current = current->next;
+				}
+			}
+		}
+		current = current->prev;
+	}
+}
+
 void *os_malloc(size_t size)
 {
 	if (size == 0)
@@ -212,7 +212,7 @@ void *os_malloc(size_t size)
 		return allocMap(size);
 	if (heapStart == NULL)
 		return preAllocBrk(size);
-	coalesce();
+	coalesce(NULL);
 	struct block_meta *block = lfGudBlock(ALIGN(size));
 
 	if (block != NULL)
@@ -230,10 +230,9 @@ void os_free(void *ptr)
 	if (ptr == NULL)
 		return;
 	struct block_meta *block = ptr - SIZE_T_SIZE;
+	size_t size = block->size;
 
 	if (block->status == STATUS_MAPPED) {
-		size_t size = block->size;
-
 		removeBlock(block);
 		munmap(ptr - SIZE_T_SIZE, ALIGN(size + SIZE_T_SIZE));
 	} else {
@@ -271,39 +270,6 @@ int getSmallestFree(struct block_meta *block)
 		current = current->next;
 	}
 	return min;
-}
-
-void coalesceRealloc(struct block_meta *block)
-{
-	struct block_meta *current = head;
-
-	while (current != NULL) {
-		if (current->status == STATUS_FREE || current == block) {
-			struct block_meta *next = current->prev;
-
-			if (next != NULL && next != block) {
-				if (next->status == STATUS_FREE) {
-					current->size += ALIGN(next->size) + SIZE_T_SIZE;
-					current->prev = next->prev;
-					if (next->prev != NULL)
-						next->prev->next = current;
-					// If theres more than 2 blocks to merge
-					if (current->next != NULL)
-						current = current->next;
-				}
-			}
-		}
-		current = current->prev;
-	}
-}
-
-int contiguousBlocks(struct block_meta *block, struct block_meta *block2)
-{
-	if (block == NULL)
-		return 0;
-	if (block->next == block2)
-		return 1;
-	return 0;
 }
 
 void *os_realloc(void *ptr, size_t size)
@@ -382,7 +348,7 @@ void *os_realloc(void *ptr, size_t size)
 	int toBeFreed = block->size - size;
 	int best = getSmallestFree(block);
 
-	coalesceRealloc(block);
+	coalesce(block);
 	if (best <= toBeFreed)
 		splitBlock(block, size);
 	block->status = STATUS_ALLOC;
