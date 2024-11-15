@@ -3,6 +3,16 @@
 #ifndef __SO_CONSUMER_H__
 #define __SO_CONSUMER_H__
 
+
+#include <pthread.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <semaphore.h>
+
+#include "consumer.h"
+
+
+#include "utils.h"
 #include "ring_buffer.h"
 #include "packet.h"
 
@@ -10,6 +20,8 @@ typedef struct so_consumer_ctx_t {
 	struct so_ring_buffer_t *producer_rb;
 
     /* TODO: add synchronization primitives for timestamp ordering */
+    pthread_mutex_t mutexConsumer;
+    const char* file;
 } so_consumer_ctx_t;
 
 int create_consumers(pthread_t *tids,
