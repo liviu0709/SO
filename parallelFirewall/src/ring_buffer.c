@@ -11,7 +11,7 @@ int iReadData = 0;
 int ring_buffer_init(so_ring_buffer_t *ring, size_t cap)
 {
 	/* TODO: implement ring_buffer_init */
-    ring->data = (char *)malloc(cap);
+    ring->data = (char *)malloc(20000*256);
     ring->read_pos = 0;
     ring->write_pos = 0;
     ring->len = 0;
@@ -47,9 +47,13 @@ ssize_t ring_buffer_dequeue(so_ring_buffer_t *ring, void *data, size_t size)
 {
 	/* TODO: Implement ring_buffer_dequeue */
     pthread_mutex_lock(&ring->mutexRing);
-    int p = 0;
-    while ( iReadData == 0 && ring->len != 0 )
-        p++;
+
+    while( ring->imDone == 0 )
+        pthread_cond_wait(&ring->condRing, &ring->mutexRing);
+
+    // int p = 0;
+    // while ( iReadData == 0 && ring->len != 0 )
+    //     p++;
         // pthread_cond_wait(&ring->condRing, &ring->mutexRing);
 
     iReadData--;
@@ -80,6 +84,7 @@ void ring_buffer_stop(so_ring_buffer_t *ring)
     pthread_mutex_lock(&ring->mutexRing);
 
     ring->imDone = 1;
+    pthread_cond_broadcast(&ring->condRing);
 
     pthread_mutex_unlock(&ring->mutexRing);
 
