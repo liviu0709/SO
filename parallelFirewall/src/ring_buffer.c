@@ -57,6 +57,10 @@ ssize_t ring_buffer_dequeue(so_ring_buffer_t *ring, void *data, size_t size)
         // pthread_cond_wait(&ring->condRing, &ring->mutexRing);
 
     iReadData--;
+    if (ring->len == 0) {
+        pthread_mutex_unlock(&ring->mutexRing);
+        return -1;
+    }
     memcpy(data, ring->data + ring->read_pos, size);
     ring->read_pos += size;
     ring->len -= size;

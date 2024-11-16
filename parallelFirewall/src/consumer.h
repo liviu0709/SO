@@ -22,6 +22,9 @@ typedef struct so_consumer_ctx_t {
     /* TODO: add synchronization primitives for timestamp ordering */
     pthread_mutex_t mutexConsumer;
     const char* file;
+    int threadNum;
+    int nrThreads;
+    pthread_cond_t condConsumer;
 } so_consumer_ctx_t;
 
 int create_consumers(pthread_t *tids,
