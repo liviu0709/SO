@@ -9,8 +9,6 @@
 pthread_mutex_t mutexRing;
 pthread_cond_t condRing, condRing2;
 
-static int iReadData;
-
 int ring_buffer_init(so_ring_buffer_t *ring, size_t cap)
 {
 	ring->data = malloc(cap);
