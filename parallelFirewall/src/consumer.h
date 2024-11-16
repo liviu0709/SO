@@ -20,11 +20,13 @@ typedef struct so_consumer_ctx_t {
 	struct so_ring_buffer_t *producer_rb;
 
     /* TODO: add synchronization primitives for timestamp ordering */
-    pthread_mutex_t mutexConsumer;
+    pthread_mutex_t *mutexConsumer;
+    pthread_mutex_t *mutexSync;
     const char* file;
     int threadNum;
     int nrThreads;
-    pthread_cond_t condConsumer;
+    pthread_cond_t *condConsumer;
+    pthread_mutex_t* mutexEnd;
 } so_consumer_ctx_t;
 
 int create_consumers(pthread_t *tids,
