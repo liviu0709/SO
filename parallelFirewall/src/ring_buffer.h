@@ -21,8 +21,6 @@ typedef struct so_ring_buffer_t {
     pthread_barrier_t *barrier;
 
     int imDone;
-    int nrThreads;
-    int currentThread;
 } so_ring_buffer_t;
 
 int     ring_buffer_init(so_ring_buffer_t *rb, size_t cap);
