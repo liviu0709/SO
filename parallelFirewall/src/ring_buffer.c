@@ -38,8 +38,8 @@ ssize_t ring_buffer_enqueue(so_ring_buffer_t *ring, void *data, size_t size)
 		pthread_cond_wait(ring->condRing2, ring->mutexRing);
 	memcpy(ring->data + ring->write_pos, data, size);
 	ring->write_pos += size;
-	pthread_cond_signal(ring->condRing);
 	pthread_mutex_unlock(ring->mutexRing);
+	pthread_cond_signal(ring->condRing);
 	return -1;
 }
 

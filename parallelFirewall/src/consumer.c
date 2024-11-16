@@ -38,8 +38,12 @@ void consumer_thread(so_consumer_ctx_t *ctx)
 		currentThread %= ctx->nrThreads;
 		pthread_cond_broadcast(ctx->condConsumer);
 		pthread_mutex_unlock(ctx->mutexSync);
-		if (ctx->producer_rb->imDone == 1 && ctx->producer_rb->read_pos == ctx->producer_rb->write_pos)
+		pthread_mutex_lock(ctx->producer_rb->mutexRing);
+		if (ctx->producer_rb->imDone == 1 && ctx->producer_rb->read_pos == ctx->producer_rb->write_pos) {
+			pthread_mutex_unlock(ctx->producer_rb->mutexRing);
 			return;
+		}
+		pthread_mutex_unlock(ctx->producer_rb->mutexRing);
 	}
 }
 pthread_mutex_t mutex, mutex2;
