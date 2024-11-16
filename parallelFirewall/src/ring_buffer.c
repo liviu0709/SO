@@ -36,10 +36,10 @@ ssize_t ring_buffer_enqueue(so_ring_buffer_t *ring, void *data, size_t size)
 	pthread_mutex_lock(ring->mutexRing);
 	while (ring->write_pos + size > ring->cap)
 		pthread_cond_wait(ring->condRing2, ring->mutexRing);
-	pthread_mutex_unlock(ring->mutexRing);
 	memcpy(ring->data + ring->write_pos, data, size);
 	ring->write_pos += size;
 	pthread_cond_signal(ring->condRing);
+	pthread_mutex_unlock(ring->mutexRing);
 	return -1;
 }
 
