@@ -23,7 +23,7 @@ void consumer_thread(so_consumer_ctx_t *ctx)
 		int ret = ring_buffer_dequeue(ctx->producer_rb, &packet, sizeof(so_packet_t));
 
 		if (ret == -1) {
-			unsigned long int hash = packet_hash(&packet);
+			unsigned long hash = packet_hash(&packet);
 			so_action_t action = process_packet(&packet);
 
 			pthread_mutex_lock(ctx->mutexConsumer);
@@ -52,13 +52,15 @@ int create_consumers(pthread_t *tids,
 					 const char *out_filename)
 {
 	FILE *out = fopen(out_filename, "w");
+
 	fclose(out);
 	pthread_mutex_init(&mutex, NULL);
 	pthread_mutex_init(&mutexC, NULL);
 	pthread_mutex_init(&mutex2, NULL);
 	pthread_cond_init(&condConsumer, NULL);
 	for (int i = 0; i < num_consumers; i++) {
-		so_consumer_ctx_t* ctx = malloc(sizeof(so_consumer_ctx_t));
+		so_consumer_ctx_t *ctx = malloc(sizeof(so_consumer_ctx_t));
+
 		ctx->producer_rb = rb;
 		ctx->nrThreads = num_consumers;
 		ctx->threadNum = i;
