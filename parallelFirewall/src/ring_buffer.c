@@ -7,14 +7,15 @@
 
 
 pthread_mutex_t mutexRing;
-pthread_cond_t condRing;
+pthread_cond_t condRing, condRing2;
 
 int iReadData = 0;
 
 int ring_buffer_init(so_ring_buffer_t *ring, size_t cap)
 {
 	/* TODO: implement ring_buffer_init */
-    ring->data = (char *)malloc(20000*256);
+    ring->data = (char *)malloc(cap);
+    // ring->data = (char *)malloc(cap);
     ring->read_pos = 0;
     ring->write_pos = 0;
     ring->len = 0;
@@ -22,6 +23,8 @@ int ring_buffer_init(so_ring_buffer_t *ring, size_t cap)
     ring->imDone = 0;
     ring->mutexRing = &mutexRing;
     ring->condRing = &condRing;
+    ring->condRing2 = &condRing2;
+    pthread_cond_init(ring->condRing2, NULL);
     pthread_mutex_init(ring->mutexRing, NULL);
     pthread_cond_init(ring->condRing, NULL);
     // pthread_barrier_init(&ring->barrier, NULL, 2);
@@ -34,15 +37,29 @@ ssize_t ring_buffer_enqueue(so_ring_buffer_t *ring, void *data, size_t size)
 {
 	/* TODO: implement ring_buffer_enqueue */
 
-    pthread_mutex_lock(ring->mutexRing);
     // printf("Enqueue\n");
-    iReadData++;
+    // iReadData++;
+    // printf("Read %ld, write %ld\n", ring->read_pos, ring->write_pos);
+    if ( ring->read_pos == ring->write_pos ) {
+        ring->read_pos = 0;
+        ring->write_pos = 0;
+        ring->len = 0;
+
+    }
+
+
+    pthread_mutex_lock(ring->mutexRing);
+    while ( ring->write_pos + size > ring->cap ) {
+        // printf("Enqueue waiting..\n");
+        pthread_cond_wait(ring->condRing2, ring->mutexRing);
+    }
+    pthread_mutex_unlock(ring->mutexRing);
+
     memcpy(ring->data + ring->write_pos, data, size);
     ring->write_pos += size;
-    ring->len += size;
+    // ring->len += size;
     pthread_cond_signal(ring->condRing);
     // printf("Enqueue\n");
-    pthread_mutex_unlock(ring->mutexRing);
 
 	return -1;
 }
@@ -56,19 +73,29 @@ ssize_t ring_buffer_dequeue(so_ring_buffer_t *ring, void *data, size_t size)
         // pthread_cond_wait(&ring->condRing, &ring->mutexRing);
 
     // int p = 0;
-    while ( ring->len == 0 && ring->imDone == 0 ) {
+    while ( ring->write_pos == ring->read_pos && ring->imDone == 0 ) {
         // printf("Dequeue waiting..\n");
         pthread_cond_wait(ring->condRing, ring->mutexRing);
     }
+    // printf("Deqeue Read %ld, write %ld\n", ring->read_pos, ring->write_pos);
     // printf("Dequeue\n");
-    iReadData--;
-    if (ring->len == 0) {
+    // iReadData--;
+
+    if ( ring->write_pos == ring->read_pos && ring->imDone == 1 ) {
         pthread_mutex_unlock(ring->mutexRing);
         return 0;
     }
+
+
     memcpy(data, ring->data + ring->read_pos, size);
     ring->read_pos += size;
-    ring->len -= size;
+    if ( ring->read_pos == ring->write_pos ) {
+        ring->read_pos = 0;
+        ring->write_pos = 0;
+        ring->len = 0;
+        pthread_cond_signal(ring->condRing2);
+
+    }
 
     pthread_mutex_unlock(ring->mutexRing);
 

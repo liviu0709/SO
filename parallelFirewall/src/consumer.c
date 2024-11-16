@@ -55,7 +55,7 @@ void consumer_thread(so_consumer_ctx_t *ctx)
         // printf("Next Thread is : Thread %d\n", currentThread);
         pthread_mutex_unlock(ctx->mutexSync);
 
-        if (ctx->producer_rb->imDone == 1 && ctx->producer_rb->len == 0) {
+        if (ctx->producer_rb->imDone == 1 && ctx->producer_rb->read_pos == ctx->producer_rb->write_pos ) {
             // printf("Thread %d finished\n", ctx->threadNum);
             return;
         }
