@@ -26,8 +26,8 @@ void consumer_thread(so_consumer_ctx_t *ctx)
         }
         curThread = (curThread + 1) % ctx->nrThreads;
         so_packet_t packet;
-        pthread_mutex_unlock(ctx->mutexConsumer);
 		int ret = ring_buffer_dequeue(ctx->producer_rb, &packet, sizeof(so_packet_t));
+        pthread_mutex_unlock(ctx->mutexConsumer);
         pthread_cond_broadcast(ctx->condConsumer);
 		if (ret == -1) {
 			unsigned long hash = packet_hash(&packet);
