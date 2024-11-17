@@ -26,5 +26,4 @@ void publish_data(so_ring_buffer_t *rb, const char *filename)
 	}
 
 	ring_buffer_stop(rb);
-    printf("Producer done\n");
 }

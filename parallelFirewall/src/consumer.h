@@ -24,9 +24,13 @@ typedef struct so_consumer_ctx_t {
     pthread_mutex_t *mutexSync;
     const char* file;
     int threadNum;
+    int threadNumPrint;
     int nrThreads;
     pthread_cond_t *condConsumer;
+    pthread_cond_t *condPrint;
     pthread_mutex_t* mutexEnd;
+
+    FILE *out;
 } so_consumer_ctx_t;
 
 int create_consumers(pthread_t *tids,

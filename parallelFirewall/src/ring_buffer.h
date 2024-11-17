@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <string.h>
 
+#include <stdio.h>
+
 #include <stdatomic.h>
 
 typedef struct so_ring_buffer_t {
@@ -16,6 +18,8 @@ typedef struct so_ring_buffer_t {
 
 	size_t len;
 	size_t cap;
+
+    FILE* out;
 
 	/* TODO: Add syncronization primitives */
     pthread_mutex_t *mutexRing;
