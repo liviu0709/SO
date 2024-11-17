@@ -6,11 +6,13 @@
 #include <sys/types.h>
 #include <string.h>
 
-typedef struct so_ring_buffer_t {
-	char *data;
+#include <stdatomic.h>
 
-	size_t read_pos;
-	size_t write_pos;
+typedef struct so_ring_buffer_t {
+	atomic_char *data;
+
+	atomic_size_t read_pos;
+	atomic_size_t write_pos;
 
 	size_t len;
 	size_t cap;
@@ -20,7 +22,7 @@ typedef struct so_ring_buffer_t {
     pthread_cond_t *condRing, *condRing2;
     pthread_barrier_t *barrier;
 
-    int imDone;
+    atomic_int imDone;
 } so_ring_buffer_t;
 
 int     ring_buffer_init(so_ring_buffer_t *rb, size_t cap);

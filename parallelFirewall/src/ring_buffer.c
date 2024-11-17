@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <semaphore.h>
+
+#include <stdatomic.h>
+
 #include "ring_buffer.h"
 
 
@@ -12,6 +15,8 @@ pthread_cond_t condRing, condRing2;
 int ring_buffer_init(so_ring_buffer_t *ring, size_t cap)
 {
 	ring->data = malloc(cap);
+
+
 	ring->read_pos = 0;
 	ring->write_pos = 0;
 	ring->len = 0;
@@ -74,8 +79,8 @@ void ring_buffer_destroy(so_ring_buffer_t *ring)
 
 void ring_buffer_stop(so_ring_buffer_t *ring)
 {
-	pthread_mutex_lock(ring->mutexRing);
+	// pthread_mutex_lock(ring->mutexRing);
 	ring->imDone = 1;
 	pthread_cond_broadcast(ring->condRing);
-	pthread_mutex_unlock(ring->mutexRing);
+	// pthread_mutex_unlock(ring->mutexRing);
 }
