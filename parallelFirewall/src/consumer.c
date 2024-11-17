@@ -33,7 +33,7 @@ void consumer_thread(so_consumer_ctx_t *ctx)
 			unsigned long hash = packet_hash(&packet);
 			so_action_t action = process_packet(&packet);
             pthread_mutex_lock(ctx->mutexSync);
-            while (ctx->threadNumPrint != curThreadPrint) {
+            while (ctx->threadNum != curThreadPrint) {
                 pthread_cond_wait(ctx->condPrint, ctx->mutexSync);
             }
             curThreadPrint = (curThreadPrint + 1) % ctx->nrThreads;
@@ -80,7 +80,6 @@ int create_consumers(pthread_t *tids,
 		ctx->condConsumer = &condConsumer;
         ctx->condPrint = &print;
         ctx->out = out;
-        ctx->threadNumPrint = i;
         pthread_mutex_t *mutex3 = malloc(sizeof(pthread_mutex_t));
 	    pthread_mutex_init(mutex3, NULL);
 		ctx->mutexEnd = mutex3;

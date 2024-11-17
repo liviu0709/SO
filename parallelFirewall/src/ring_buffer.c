@@ -53,6 +53,7 @@ ssize_t ring_buffer_dequeue(so_ring_buffer_t *ring, void *data, size_t size)
 		pthread_mutex_unlock(ring->mutexRing);
 		return 0;
 	}
+	pthread_mutex_unlock(ring->mutexRing);
 	memcpy(data, ring->data + ring->read_pos, size);
 	ring->read_pos += size;
 	if (ring->read_pos == ring->write_pos && ring->imDone == 0) {
@@ -60,7 +61,6 @@ ssize_t ring_buffer_dequeue(so_ring_buffer_t *ring, void *data, size_t size)
 		ring->write_pos = 0;
 		pthread_cond_signal(ring->condRing2);
 	}
-	pthread_mutex_unlock(ring->mutexRing);
 	return -1;
 }
 
