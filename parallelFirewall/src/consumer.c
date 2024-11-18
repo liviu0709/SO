@@ -5,56 +5,61 @@
 #include <unistd.h>
 #include <semaphore.h>
 
-#include <stdatomic.h>
-
 #include "consumer.h"
 #include "ring_buffer.h"
 #include "packet.h"
 #include "utils.h"
 
-static int currentThread;
-atomic_int curThread = 0;
-atomic_int curThreadPrint = 0;
-atomic_int imNotOut = 0;
+static int currentThread, currentPrint;
+
 void consumer_thread(so_consumer_ctx_t *ctx)
 {
 	while (1) {
-
-        pthread_mutex_lock(ctx->mutexConsumer);
-        while (ctx->threadNum != curThread && imNotOut == 0 ) {
-            pthread_cond_wait(ctx->condConsumer, ctx->mutexConsumer);
-        }
-        curThread = (curThread + 1) % ctx->nrThreads;
-        so_packet_t packet;
+		pthread_mutex_lock(ctx->mutexSync);
+		while (ctx->threadNum != currentThread)
+			pthread_cond_wait(ctx->condConsumer, ctx->mutexSync);
+		so_packet_t packet;
 		int ret = ring_buffer_dequeue(ctx->producer_rb, &packet, sizeof(so_packet_t));
-        pthread_mutex_unlock(ctx->mutexConsumer);
+        currentThread++;
+		currentThread %= ctx->nrThreads;
+		pthread_mutex_unlock(ctx->mutexSync);
         pthread_cond_broadcast(ctx->condConsumer);
 		if (ret == -1) {
 			unsigned long hash = packet_hash(&packet);
 			so_action_t action = process_packet(&packet);
-            pthread_mutex_lock(ctx->mutexSync);
-            while (ctx->threadNum != curThreadPrint) {
-                pthread_cond_wait(ctx->condPrint, ctx->mutexSync);
+
+			pthread_mutex_lock(ctx->mutexPrint);
+
+            while ( ctx->threadNum != currentPrint) {
+                pthread_cond_wait(ctx->condPrint, ctx->mutexPrint);
             }
-            curThreadPrint = (curThreadPrint + 1) % ctx->nrThreads;
-			fprintf(ctx->out, "%s %016lx %lu\n", RES_TO_STR(action), hash, packet.hdr.timestamp);
-            pthread_mutex_unlock(ctx->mutexSync);
+
+			FILE *out = fopen(ctx->file, "a");
+
+			fprintf(out, "%s %016lx %lu\n", RES_TO_STR(action), hash, packet.hdr.timestamp);
+			fclose(out);
+
+            currentPrint++;
+            currentPrint %= ctx->nrThreads;
+
+			pthread_mutex_unlock(ctx->mutexPrint);
             pthread_cond_broadcast(ctx->condPrint);
-        }
-        // pthread_mutex_lock(ctx->producer_rb->mutexRing);
-        // printf("Thread %d. Read %d. Write %d\n", ctx->threadNum, ctx->producer_rb->read_pos, ctx->producer_rb->write_pos);
-        if ( ctx->producer_rb->imDone == 1 && ctx->producer_rb->write_pos == ctx->producer_rb->read_pos) {
-            // printf("Thread %d finished\n", ctx->threadNum);
-            // pthread_mutex_unlock(ctx->producer_rb->mutexRing);
-            imNotOut = 1;
-            break;
-        }
-        // pthread_mutex_unlock(ctx->producer_rb->mutexRing);
+		}
+
+
+
+
+		// pthread_mutex_lock(ctx->producer_rb->mutexRing);
+		if (ctx->producer_rb->imDone == 1 && ctx->producer_rb->read_pos == ctx->producer_rb->write_pos) {
+			// pthread_mutex_unlock(ctx->producer_rb->mutexRing);
+			return;
+		}
+		// pthread_mutex_unlock(ctx->producer_rb->mutexRing);
 	}
 }
-pthread_mutex_t mutex, mutex2;
+pthread_mutex_t mutex, mutex2, mutexPrint;
 pthread_mutex_t mutexC;
-pthread_cond_t condConsumer, print;
+pthread_cond_t condConsumer, condPrint;
 
 int create_consumers(pthread_t *tids,
 					 int num_consumers,
@@ -62,12 +67,14 @@ int create_consumers(pthread_t *tids,
 					 const char *out_filename)
 {
 	FILE *out = fopen(out_filename, "w");
-    rb->out = out;
-	// fclose(out);
+
+	fclose(out);
 	pthread_mutex_init(&mutex, NULL);
 	pthread_mutex_init(&mutexC, NULL);
+	pthread_mutex_init(&mutex2, NULL);
+    pthread_mutex_init(&mutexPrint, NULL);
 	pthread_cond_init(&condConsumer, NULL);
-    pthread_cond_init(&print, NULL);
+    pthread_cond_init(&condPrint, NULL);
 	for (int i = 0; i < num_consumers; i++) {
 		so_consumer_ctx_t *ctx = malloc(sizeof(so_consumer_ctx_t));
 
@@ -78,11 +85,9 @@ int create_consumers(pthread_t *tids,
 		ctx->mutexConsumer = &mutexC;
 		ctx->mutexSync = &mutex;
 		ctx->condConsumer = &condConsumer;
-        ctx->condPrint = &print;
-        ctx->out = out;
-        pthread_mutex_t *mutex3 = malloc(sizeof(pthread_mutex_t));
-	    pthread_mutex_init(mutex3, NULL);
-		ctx->mutexEnd = mutex3;
+		ctx->mutexEnd = &mutex2;
+        ctx->condPrint = &condPrint;
+        ctx->mutexPrint = &mutexPrint;
 		pthread_create(&tids[i], NULL, (void *)consumer_thread, ctx);
 	}
 	return num_consumers;
