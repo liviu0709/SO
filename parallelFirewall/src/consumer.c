@@ -61,8 +61,9 @@ int create_consumers(pthread_t *tids,
 	pthread_mutex_init(&mutexPrint, NULL);
 	pthread_cond_init(&condConsumer, NULL);
 	pthread_cond_init(&condPrint, NULL);
+so_consumer_ctx_t *ctxx = malloc(sizeof(so_consumer_ctx_t) * num_consumers);
 	for (int i = 0; i < num_consumers; i++) {
-		so_consumer_ctx_t *ctx = malloc(sizeof(so_consumer_ctx_t));
+		so_consumer_ctx_t *ctx = &ctxx[i];
 
 		ctx->producer_rb = rb;
 		ctx->nrThreads = num_consumers;
@@ -74,5 +75,6 @@ int create_consumers(pthread_t *tids,
 		ctx->mutexPrint = &mutexPrint;
 		pthread_create(&tids[i], NULL, (void *)consumer_thread, ctx);
 	}
+rb->ctx = ctxx;
 	return num_consumers;
 }

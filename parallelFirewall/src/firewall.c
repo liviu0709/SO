@@ -70,9 +70,10 @@ int main(int argc, char **argv)
 
 	for (int i = 0; i < threads; i++)
 		pthread_join(thread_ids[i], NULL);
-    // fclose(ring_buffer.out);
+// fclose(ring_buffer.out);
 	ring_buffer_destroy(&ring_buffer);
 	free(thread_ids);
+
 
 	return 0;
 }

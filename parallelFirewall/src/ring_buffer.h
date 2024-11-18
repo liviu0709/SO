@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 
+#include "consumer.h"
 #include <stdatomic.h>
 
 typedef struct so_ring_buffer_t {
@@ -19,21 +20,23 @@ typedef struct so_ring_buffer_t {
 	size_t len;
 	size_t cap;
 
-    FILE* out;
+FILE* out;
 
 	/* TODO: Add syncronization primitives */
-    pthread_mutex_t *mutexRing;
-    pthread_mutex_t *mutexRead;
-    pthread_cond_t *condRing, *condRing2;
-    pthread_barrier_t *barrier;
+pthread_mutex_t *mutexRing;
+pthread_mutex_t *mutexRead;
+pthread_cond_t *condRing, *condRing2;
+pthread_barrier_t *barrier;
 
-    atomic_int imDone;
+atomic_int imDone;
+
+struct so_consumer_ctx_t *ctx;
 } so_ring_buffer_t;
 
-int     ring_buffer_init(so_ring_buffer_t *rb, size_t cap);
+int ring_buffer_init(so_ring_buffer_t *rb, size_t cap);
 ssize_t ring_buffer_enqueue(so_ring_buffer_t *rb, void *data, size_t size);
 ssize_t ring_buffer_dequeue(so_ring_buffer_t *rb, void *data, size_t size);
-void    ring_buffer_destroy(so_ring_buffer_t *rb);
-void    ring_buffer_stop(so_ring_buffer_t *rb);
+voidring_buffer_destroy(so_ring_buffer_t *rb);
+voidring_buffer_stop(so_ring_buffer_t *rb);
 
 #endif /* __SO_RINGBUFFER_H__ */
