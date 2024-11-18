@@ -23,6 +23,7 @@ typedef struct so_ring_buffer_t {
 
 	/* TODO: Add syncronization primitives */
     pthread_mutex_t *mutexRing;
+    pthread_mutex_t *mutexRead;
     pthread_cond_t *condRing, *condRing2;
     pthread_barrier_t *barrier;
 

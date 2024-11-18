@@ -9,7 +9,7 @@
 #include "ring_buffer.h"
 
 
-pthread_mutex_t mutexRing, test;
+pthread_mutex_t mutexRing, test, mutexRead;
 pthread_cond_t condRing, condRing2;
 
 int ring_buffer_init(so_ring_buffer_t *ring, size_t cap)
@@ -25,7 +25,9 @@ int ring_buffer_init(so_ring_buffer_t *ring, size_t cap)
 	ring->mutexRing = &mutexRing;
 	ring->condRing = &condRing;
 	ring->condRing2 = &condRing2;
+    ring->mutexRead = &mutexRead;
     pthread_mutex_init(&test, NULL);
+    pthread_mutex_init(ring->mutexRing, NULL);
 	pthread_cond_init(ring->condRing2, NULL);
 	pthread_mutex_init(ring->mutexRing, NULL);
 	pthread_cond_init(ring->condRing, NULL);
@@ -46,12 +48,13 @@ ssize_t ring_buffer_enqueue(so_ring_buffer_t *ring, void *data, size_t size)
 
 ssize_t ring_buffer_dequeue(so_ring_buffer_t *ring, void *data, size_t size)
 {
-	pthread_mutex_lock(ring->mutexRing);
+	pthread_mutex_lock(ring->mutexRead);
+    pthread_mutex_lock(ring->mutexRing);
 	while (ring->write_pos == ring->read_pos && ring->imDone == 0)
 		pthread_cond_wait(ring->condRing, ring->mutexRing);
     pthread_mutex_unlock(ring->mutexRing);
 	if (ring->write_pos == ring->read_pos && ring->imDone == 1) {
-		// pthread_mutex_unlock(ring->mutexRing);
+        pthread_mutex_unlock(ring->mutexRead);
 		return 0;
 	}
 	memcpy(data, ring->data + ring->read_pos, size);
@@ -61,6 +64,7 @@ ssize_t ring_buffer_dequeue(so_ring_buffer_t *ring, void *data, size_t size)
 		ring->write_pos = 0;
 		pthread_cond_signal(ring->condRing2);
 	}
+    pthread_mutex_unlock(ring->mutexRead);
 	// pthread_mutex_unlock(ring->mutexRing);
 	return -1;
 }
