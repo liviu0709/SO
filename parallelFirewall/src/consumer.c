@@ -28,6 +28,7 @@ void consumer_thread(so_consumer_ctx_t *ctx)
 		if (ret == -1) {
 			unsigned long hash = packet_hash(&packet);
 			so_action_t action = process_packet(&packet);
+			
 			pthread_mutex_lock(ctx->mutexPrint);
 			while (ctx->threadNum != currentPrint)
 				pthread_cond_wait(ctx->condPrint, ctx->mutexPrint);
