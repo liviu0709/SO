@@ -45,8 +45,8 @@ void consumer_thread(so_consumer_ctx_t *ctx)
 			return;
 	}
 }
-pthread_mutex_t mutex, mutex2, mutexPrint;
-pthread_mutex_t mutexC;
+pthread_mutex_t mutex, mutexPrint;
+
 pthread_cond_t condConsumer, condPrint;
 
 int create_consumers(pthread_t *tids,
@@ -58,11 +58,9 @@ int create_consumers(pthread_t *tids,
 
 	fclose(out);
 	pthread_mutex_init(&mutex, NULL);
-	pthread_mutex_init(&mutexC, NULL);
-	pthread_mutex_init(&mutex2, NULL);
-pthread_mutex_init(&mutexPrint, NULL);
+	pthread_mutex_init(&mutexPrint, NULL);
 	pthread_cond_init(&condConsumer, NULL);
-pthread_cond_init(&condPrint, NULL);
+	pthread_cond_init(&condPrint, NULL);
 	for (int i = 0; i < num_consumers; i++) {
 		so_consumer_ctx_t *ctx = malloc(sizeof(so_consumer_ctx_t));
 
@@ -70,12 +68,10 @@ pthread_cond_init(&condPrint, NULL);
 		ctx->nrThreads = num_consumers;
 		ctx->threadNum = i;
 		ctx->file = out_filename;
-		ctx->mutexConsumer = &mutexC;
 		ctx->mutexSync = &mutex;
 		ctx->condConsumer = &condConsumer;
-		ctx->mutexEnd = &mutex2;
-ctx->condPrint = &condPrint;
-ctx->mutexPrint = &mutexPrint;
+		ctx->condPrint = &condPrint;
+		ctx->mutexPrint = &mutexPrint;
 		pthread_create(&tids[i], NULL, (void *)consumer_thread, ctx);
 	}
 	return num_consumers;
