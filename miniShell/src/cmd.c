@@ -7,11 +7,19 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
 #include "cmd.h"
 #include "utils.h"
 
 #define READ		0
 #define WRITE		1
+#define ERROR		2
+#define COPY_WRITE 1023
+#define COPY_READ 1022
+#define COPY_ERR 1021
 
 /**
  * Internal change-directory command.
@@ -30,7 +38,17 @@ static int shell_exit(void)
 {
 	/* TODO: Execute exit/quit. */
 
-	return 0; /* TODO: Replace with actual exit code. */
+	return SHELL_EXIT; /* TODO: Replace with actual exit code. */
+}
+char* addPath(char* path, const char* command) {
+    if (command[0] == '/' | command[0] == '.') {
+        return command;
+    }
+    char* result = malloc(strlen(path) + strlen(command) + 2);
+    strcpy(result, path);
+    strcat(result, "/");
+    strcat(result, command);
+    return result;
 }
 
 /**
@@ -40,21 +58,82 @@ static int shell_exit(void)
 static int parse_simple(simple_command_t *s, int level, command_t *father)
 {
 	/* TODO: Sanity checks. */
-
-	/* TODO: If builtin command, execute the command. */
+    bool redirectedOutput = false;
+    bool redirectedInput = false;
+    bool redirectedError = false;
+    bool redirectedOutAndErr = false;
+    if (s->out) {
+        int fd;
+        // For now theres just one possible output file
+        if (s->io_flags & IO_OUT_APPEND) {
+            fd = open(s->out->string, O_WRONLY | O_CREAT | O_APPEND, 0644);
+        } else {
+            fd = open(s->out->string, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        }
+        dup2(WRITE, COPY_WRITE);
+        dup2(fd, WRITE);
+        redirectedOutput = true;
+    }
+    if (s->in) {
+        int fd = open(s->in->string, O_RDONLY);
+        dup2(READ, COPY_READ);
+        dup2(fd, READ);
+        redirectedInput = true;
+    }
+    if (s->err) {
+        bool handled = false;
+        if ( redirectedOutput ) {
+            if (strcmp(s->err->string, s->out->string) == 0) {
+                dup2(WRITE, ERROR);
+                redirectedOutAndErr = true;
+                handled = true;
+            }
+        }
+        if (!handled) {
+            int fd;
+            if (s->io_flags & IO_ERR_APPEND) {
+                fd = open(s->err->string, O_WRONLY | O_CREAT | O_APPEND, 0644);
+            } else {
+                fd = open(s->err->string, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            }
+            dup2(ERROR, COPY_ERR);
+            dup2(fd, ERROR);
+            redirectedError = true;
+        }
+    }
 
 	/* TODO: If variable assignment, execute the assignment and return
 	 * the exit status.
 	 */
 
-	/* TODO: If external command:
-	 *   1. Fork new process
-	 *     2c. Perform redirections in child
-	 *     3c. Load executable in child
-	 *   2. Wait for child
-	 *   3. Return exit status
-	 */
-
+    if (strcmp(s->verb->string, "exit") == 0 || strcmp(s->verb->string, "quit") == 0) {
+                return shell_exit();
+        }
+    int argCount = 0;
+    char** argList = get_argv(s, &argCount);
+    pid_t pid = fork();
+    if (pid == 0) {
+        char* path = addPath("/bin", s->verb->string);
+        execv(path, argList);
+    } else {
+        int status;
+        waitpid(pid, &status, 0);
+        if (redirectedOutput) {
+            close(WRITE);
+            dup2(COPY_WRITE, WRITE);
+        }
+        if (redirectedInput) {
+            close(READ);
+            dup2(COPY_READ, READ);
+        }
+        if ( redirectedOutAndErr )
+            return status;
+        if (redirectedError) {
+            close(ERROR);
+            dup2(COPY_ERR, ERROR);
+        }
+        return status;
+    }
 	return 0; /* TODO: Replace with actual exit status. */
 }
 
@@ -80,6 +159,7 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 	return true; /* TODO: Replace with actual exit status. */
 }
 
+
 /**
  * Parse and execute a command.
  */
@@ -88,9 +168,9 @@ int parse_command(command_t *c, int level, command_t *father)
 	/* TODO: sanity checks */
 
 	if (c->op == OP_NONE) {
-		/* TODO: Execute a simple command. */
+        return parse_simple(c->scmd, level, father);
 
-		return 0; /* TODO: Replace with actual exit code of command. */
+
 	}
 
 	switch (c->op) {
