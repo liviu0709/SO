@@ -212,16 +212,22 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
     int pipeArray[2], ret;
     pipe(pipeArray);
 
-    dup2(pipeArray[1], WRITE);
-    ret = parse_command(cmd1, level + 1, father);
-    close(pipeArray[1]);
+    pid_t pid = fork();
 
-    dup2(fdout, WRITE);
-    dup2(pipeArray[0], READ);
-    ret = parse_command(cmd2, level + 1, father);
-    close(pipeArray[0]);
-    dup2(fdin, READ);
-
+    if (pid == 0) {
+        close(pipeArray[0]);
+        dup2(pipeArray[1], WRITE);
+        ret = parse_command(cmd1, level + 1, father);
+        close(pipeArray[1]);
+        exit(ret);
+    } else {
+        close(pipeArray[1]);
+        dup2(fdout, WRITE);
+        dup2(pipeArray[0], READ);
+        ret = parse_command(cmd2, level + 1, father);
+        close(pipeArray[0]);
+        dup2(fdin, READ);
+    }
     close(fdin);
     close(fdout);
 	return ret;
