@@ -234,7 +234,7 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 int parse_command(command_t *c, int level, command_t *father)
 {
 	/* TODO: sanity checks */
-    int ret;
+    int ret, pid;
     if ( init == 0 ) {
         dup2(WRITE, COPY_WRITE);
         dup2(READ, COPY_READ);
@@ -254,7 +254,6 @@ int parse_command(command_t *c, int level, command_t *father)
 
 	case OP_PARALLEL:
 		/* TODO: Execute the commands simultaneously. */
-        int pid;
         pid = fork();
         if (pid == 0) {
             parse_command(c->cmd1, level + 1, c);
