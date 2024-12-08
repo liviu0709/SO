@@ -254,7 +254,7 @@ int parse_command(command_t *c, int level, command_t *father)
 
 	case OP_PARALLEL:
 		/* TODO: Execute the commands simultaneously. */
-        pid_t pid;
+        int pid;
         pid = fork();
         if (pid == 0) {
             parse_command(c->cmd1, level + 1, c);
