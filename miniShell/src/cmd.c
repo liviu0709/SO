@@ -65,14 +65,14 @@ void repairFds(bool redirectedOutput, bool redirectedInput, bool redirectedError
 
 char *combineParts(word_t *word)
 {
-	char *result = malloc(strlen(word->string) + 1);\
+	char *result = malloc(strlen(word->string) + 1);
 
 	if (word->expand) {
 		if (getenv(word->string) == NULL)
 			setenv(word->string, "", 1);
-		strcpy(result, getenv(word->string));
+		strncpy(result, getenv(word->string), strlen(getenv(word->string)) + 1);
 	} else {
-		strcpy(result, word->string);
+		strncpy(result, word->string, strlen(word->string) + 1);
 	}
 	word_t *current = word->next_part;
 
