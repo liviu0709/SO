@@ -234,6 +234,7 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 int parse_command(command_t *c, int level, command_t *father)
 {
 	/* TODO: sanity checks */
+    int ret;
     if ( init == 0 ) {
         dup2(WRITE, COPY_WRITE);
         dup2(READ, COPY_READ);
@@ -266,7 +267,7 @@ int parse_command(command_t *c, int level, command_t *father)
 		/* TODO: Execute the second command only if the first one
 		 * returns non zero.
 		 */
-        int ret = parse_command(c->cmd1, level + 1, c);
+        ret = parse_command(c->cmd1, level + 1, c);
         // printf("Ret: %d\n", ret);
         if (ret != 0) {
             return parse_command(c->cmd2, level + 1, c);
