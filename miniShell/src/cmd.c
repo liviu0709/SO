@@ -67,12 +67,13 @@ char *combineParts(word_t *word)
 {
 	char *result = malloc(strlen(word->string) + 1);
 
+	result[0] = '\0';
 	if (word->expand) {
 		if (getenv(word->string) == NULL)
 			setenv(word->string, "", 1);
-		strncpy(result, getenv(word->string), strlen(getenv(word->string)) + 1);
+		strcat(result, getenv(word->string));
 	} else {
-		strncpy(result, word->string, strlen(word->string) + 1);
+		strcat(result, word->string);
 	}
 	word_t *current = word->next_part;
 
@@ -105,6 +106,7 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	bool redirectedError = false;
 	bool redirectedOutAndErr = false;
 	char *outString = NULL;
+
 	if (s->out) {
 		int fd;
 		char *path = combineParts(s->out);
@@ -206,6 +208,7 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 	int fdin = dup(READ);
 	int fdout = dup(WRITE);
 	int pipeArray[2], ret;
+
 	pipe(pipeArray);
 
 	pid_t pid = fork();
@@ -235,6 +238,7 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 int parse_command(command_t *c, int level, command_t *father)
 {
 	int ret;
+
 	if (init == 0) {
 		dup2(WRITE, COPY_WRITE);
 		dup2(READ, COPY_READ);
