@@ -45,7 +45,6 @@ static bool shell_cd(word_t *dir)
 static int shell_exit(void)
 {
 	/* TODO: Execute exit/quit. */
-
 	return SHELL_EXIT; /* TODO: Replace with actual exit code. */
 }
 char* addPath(char* path, const char* command) {
@@ -182,14 +181,13 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
         char* path = addPath("/bin", s->verb->string);
         execv(path, argList);
         printf("Execution failed for '%s'\n", s->verb->string);
-        return 1;
+        exit(1);
     } else {
         int status;
         waitpid(pid, &status, 0);
         repairFds(redirectedOutput, redirectedInput, redirectedError, redirectedOutAndErr);
         return status;
     }
-	return 0; /* TODO: Replace with actual exit status. */
 }
 
 /**
@@ -250,14 +248,14 @@ int parse_command(command_t *c, int level, command_t *father)
         init = 1;
     }
 
-	if (c->op == OP_NONE) {
-        return parse_simple(c->scmd, level, father);
-	}
 	switch (c->op) {
+    case OP_NONE:
+        ret = parse_simple(c->scmd, level, father);
+        break;
 	case OP_SEQUENTIAL:
 		/* TODO: Execute the commands one after the other. */
         parse_command(c->cmd1, level + 1, c);
-        parse_command(c->cmd2, level + 1, c);
+        ret = parse_command(c->cmd2, level + 1, c);
 		break;
 
 	case OP_PARALLEL:
@@ -267,7 +265,7 @@ int parse_command(command_t *c, int level, command_t *father)
             parse_command(c->cmd1, level + 1, c);
             exit(0);
         } else {
-            parse_command(c->cmd2, level + 1, c);
+            ret = parse_command(c->cmd2, level + 1, c);
         }
 		break;
 
@@ -278,7 +276,7 @@ int parse_command(command_t *c, int level, command_t *father)
         ret = parse_command(c->cmd1, level + 1, c);
         // printf("Ret: %d\n", ret);
         if (ret != 0) {
-            return parse_command(c->cmd2, level + 1, c);
+            ret = parse_command(c->cmd2, level + 1, c);
         }
 		break;
 
@@ -288,7 +286,7 @@ int parse_command(command_t *c, int level, command_t *father)
 		 */
         ret = parse_command(c->cmd1, level + 1, c);
         if (ret == 0) {
-            return parse_command(c->cmd2, level + 1, c);
+            ret = parse_command(c->cmd2, level + 1, c);
         }
 		break;
 
@@ -296,12 +294,12 @@ int parse_command(command_t *c, int level, command_t *father)
 		/* TODO: Redirect the output of the first command to the
 		 * input of the second.
 		 */
-        return run_on_pipe(c->cmd1, c->cmd2, level + 1, c);
+        ret = run_on_pipe(c->cmd1, c->cmd2, level + 1, c);
 		break;
 
 	default:
 		return SHELL_EXIT;
 	}
 
-	return 0; /* TODO: Replace with actual exit code of command. */
+	return ret; /* TODO: Replace with actual exit code of command. */
 }
