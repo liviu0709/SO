@@ -181,6 +181,8 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
     if (pid == 0) {
         char* path = addPath("/bin", s->verb->string);
         execv(path, argList);
+        printf("Execution failed for '%s'\n", s->verb->string);
+        return 1;
     } else {
         int status;
         waitpid(pid, &status, 0);
