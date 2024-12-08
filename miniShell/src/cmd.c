@@ -47,16 +47,6 @@ static int shell_exit(void)
 	/* TODO: Execute exit/quit. */
 	return SHELL_EXIT; /* TODO: Replace with actual exit code. */
 }
-char* addPath(char* path, const char* command) {
-    if (command[0] == '/' || command[0] == '.') {
-        return command;
-    }
-    char* result = malloc(strlen(path) + strlen(command) + 2);
-    strcpy(result, path);
-    strcat(result, "/");
-    strcat(result, command);
-    return result;
-}
 
 void repairFds(bool redirectedOutput, bool redirectedInput, bool redirectedError, bool redirectedOutAndErr) {
     if (redirectedOutput) {
@@ -105,8 +95,6 @@ char* combineParts(word_t* word) {
  */
 static int parse_simple(simple_command_t *s, int level, command_t *father)
 {
-    // (eventually the hardcoded /bin path should not be needed...)
-    // printf("Path: %s\n", getenv("PATH"));
     if (strcmp(s->verb->string, "exit") == 0 || strcmp(s->verb->string, "quit") == 0) {
                 return shell_exit();
         }
@@ -178,8 +166,7 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
     char** argList = get_argv(s, &argCount);
     pid_t pid = fork();
     if (pid == 0) {
-        char* path = addPath("/bin", s->verb->string);
-        execv(path, argList);
+        execvp(s->verb->string, argList);
         printf("Execution failed for '%s'\n", s->verb->string);
         exit(1);
     } else {
