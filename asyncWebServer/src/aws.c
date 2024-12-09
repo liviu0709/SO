@@ -36,7 +36,11 @@ static int aws_on_path_cb(http_parser *p, const char *buf, size_t len)
 	struct connection *conn = (struct connection *)p->data;
 	memcpy(conn->request_path, buf, len);
 	conn->request_path[len] = '\0';
-    snprintf(conn->request_path, ".%s", conn->request_path);
+    char buff[BUFSIZ];
+    buff[0] = '.';
+    buff[1] = '\0';
+    strcat(buff, conn->request_path);
+    strcpy(conn->request_path, buff);
 	conn->have_path = 1;
 	return 0;
 }
@@ -50,7 +54,7 @@ static void connection_prepare_send_reply_header(struct connection *conn)
     conn->file_size = file_stat.st_size;
     close(fd);
     char buff[BUFSIZ];
-    dlog(LOG_INFO, "File size: %ld\n", conn->file_size);
+    // dlog(LOG_INFO, "File size: %ld\n", conn->file_size);
     snprintf(buff, BUFSIZ, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n", conn->file_size);
     strcpy(conn->send_buffer, buff);
     conn->send_len = strlen(conn->send_buffer);
@@ -141,7 +145,7 @@ void handle_new_connection(void)
     conn = connection_create(sockfd);
 	/* TODO: Add socket to epoll. */
     w_epoll_add_ptr_in(epollfd, sockfd, conn);
-    printf("Accepted connection from %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+    dlog(LOG_INFO, "Accepted connection from %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 	/* TODO: Initialize HTTP_REQUEST parser. */
     http_parser_init(&conn->request_parser, HTTP_REQUEST);
     conn->request_parser.data = conn;
@@ -174,11 +178,26 @@ void receive_data(struct connection *conn)
 	 */
     char buf[BUFSIZ];
     conn->recv_buffer[0] = '\0';
-    while (recv(conn->fd, buf, BUFSIZ, 0) > 0)
-        strcat(conn->recv_buffer, buf);
-    conn->recv_len = strlen(conn->recv_buffer);
+
+    int ret = 1;
+    int total_len = 0;
+    while ( ret > 0 ) {
+        ret = recv(conn->fd, buf, BUFSIZ, 0);
+        if (ret == -1) {
+            dlog(LOG_INFO, "All data READ!\n");
+            break;
+        }
+        if ( total_len + ret > BUFSIZ ) {
+            dlog(LOG_INFO, "Buffer overflow\n");
+            break;
+        }
+        total_len += ret;
+        strncat(conn->recv_buffer, buf, ret);
+    }
+    conn->recv_len = total_len;
+    conn->recv_buffer[conn->recv_len] = '\0';
     dlog(LOG_INFO, "Receiving data with len: %d\n", (int)conn->recv_len);
-    dlog(LOG_INFO, "buffer info: %s\n", conn->recv_buffer);
+    dlog(LOG_INFO, "buffer info: \n%s\n", conn->recv_buffer);
 }
 
 int connection_open_file(struct connection *conn)
@@ -218,16 +237,15 @@ int parse_header(struct connection *conn)
 enum connection_state connection_send_static(struct connection *conn)
 {
 	/* TODO: Send static data using sendfile(2). */
-    dlog(LOG_INFO, "Sending static data\n");
+    // dlog(LOG_INFO, "Sending static data\n");
     int fd = open(conn->request_path, O_RDONLY);
     struct stat file_stat;
-    dlog(LOG_INFO, "File name: %s\n", buffer);
     fstat(fd, &file_stat);
     off_t offset = 0;
-    dlog(LOG_INFO, "File size: %ld\n", file_stat.st_size);
+    // dlog(LOG_INFO, "File size: %ld\n", file_stat.st_size);
     while (offset < file_stat.st_size) {
         int ret = sendfile(conn->fd, fd, &offset, file_stat.st_size);
-        dlog(LOG_INFO, "Sent %d bytes\n", ret);
+        // dlog(LOG_INFO, "Sent %d bytes\n", ret);
     }
     close(fd);
 	return STATE_NO_STATE;
@@ -249,10 +267,12 @@ void handle_input(struct connection *conn)
 	/* TODO: Handle input information: may be a new message or notification of
 	 * completion of an asynchronous I/O operation.
 	 */
-    dlog(LOG_INFO, "Handling shit\n");
+    // dlog(LOG_INFO, "Handling shit\n");
+
     receive_data(conn);
     parse_header(conn);
-    dlog(LOG_INFO, "buffer info: %s\n", conn->request_path);
+    dlog(LOG_INFO, "Path info: %s\n", conn->request_path);
+
 
     if ( strstr(conn->request_path, AWS_REL_STATIC_FOLDER) != NULL ) {
         conn->res_type = RESOURCE_TYPE_STATIC;
@@ -262,6 +282,12 @@ void handle_input(struct connection *conn)
         conn->res_type = RESOURCE_TYPE_NONE;
     }
 
+    // Check if file exists
+    int fd = open(conn->request_path, O_RDONLY);
+    dlog(LOG_INFO, "File descriptor: %d\n", fd);
+    if ( fd == -1 )
+        conn->res_type = RESOURCE_TYPE_NONE;
+    close(fd);
 
     connection_send_data(conn);
 
