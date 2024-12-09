@@ -36,6 +36,7 @@ static int aws_on_path_cb(http_parser *p, const char *buf, size_t len)
 	struct connection *conn = (struct connection *)p->data;
 	memcpy(conn->request_path, buf, len);
 	conn->request_path[len] = '\0';
+    snprintf(conn->request_path, ".%s", conn->request_path);
 	conn->have_path = 1;
 	return 0;
 }
@@ -43,11 +44,7 @@ static int aws_on_path_cb(http_parser *p, const char *buf, size_t len)
 static void connection_prepare_send_reply_header(struct connection *conn)
 {
 	/* TODO: Prepare the connection buffer to send the reply header. */
-    char buf[BUFSIZ];
-    buf[0] = '.';
-    buf[1] = '\0';
-    strcat(buf, conn->filename);
-    int fd = open(buf, O_RDONLY);
+    int fd = open(conn->request_path, O_RDONLY);
     struct stat file_stat;
     fstat(fd, &file_stat);
     conn->file_size = file_stat.st_size;
@@ -72,6 +69,18 @@ static void connection_prepare_send_reply_header(struct connection *conn)
 static void connection_prepare_send_404(struct connection *conn)
 {
 	/* TODO: Prepare the connection buffer to send the 404 header. */
+    snprintf(conn->send_buffer, BUFSIZ, "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: 0\r\n\r\n");
+    conn->send_len = strlen(conn->send_buffer);
+    int ret = 0;
+    while(ret < conn->send_len) {
+        int s;
+        s = send(conn->fd, conn->send_buffer + ret, conn->send_len - ret, 0);
+        if (s == -1) {
+            perror("send");
+            exit(1);
+        }
+        ret += s;
+    }
 }
 
 static enum resource_type connection_get_resource_type(struct connection *conn)
@@ -145,7 +154,7 @@ int connection_send_data(struct connection *conn)
 	/* TODO: Send as much data as possible from the connection send buffer.
 	 * Returns the number of bytes sent or -1 if an error occurred
 	 */
-    dlog(LOG_INFO, "Sending data. Data type: %d. File name: %s\n", conn->res_type, conn->filename);
+    dlog(LOG_INFO, "Sending data. Data type: %d. File name: %s\n", conn->res_type, conn->request_path);
     if (conn->res_type == RESOURCE_TYPE_STATIC) {
         connection_prepare_send_reply_header(conn);
         conn->state = connection_send_static(conn);
@@ -210,11 +219,7 @@ enum connection_state connection_send_static(struct connection *conn)
 {
 	/* TODO: Send static data using sendfile(2). */
     dlog(LOG_INFO, "Sending static data\n");
-    char buffer[BUFSIZ];
-    buffer[0] = '.';
-    buffer[1] = '\0';
-    strcat(buffer, conn->filename);
-    int fd = open(buffer, O_RDONLY);
+    int fd = open(conn->request_path, O_RDONLY);
     struct stat file_stat;
     dlog(LOG_INFO, "File name: %s\n", buffer);
     fstat(fd, &file_stat);
@@ -224,10 +229,7 @@ enum connection_state connection_send_static(struct connection *conn)
         int ret = sendfile(conn->fd, fd, &offset, file_stat.st_size);
         dlog(LOG_INFO, "Sent %d bytes\n", ret);
     }
-    // int ret = sendfile(conn->fd, fd, &offset, file_stat.st_size);
-    // dlog(LOG_INFO, "Sent %d bytes\n", ret);
     close(fd);
-    // dlog(LOG_INFO, "Sent static data\n");
 	return STATE_NO_STATE;
 }
 
@@ -250,7 +252,6 @@ void handle_input(struct connection *conn)
     dlog(LOG_INFO, "Handling shit\n");
     receive_data(conn);
     parse_header(conn);
-    strcpy(conn->filename, conn->request_path);
     dlog(LOG_INFO, "buffer info: %s\n", conn->request_path);
 
     if ( strstr(conn->request_path, AWS_REL_STATIC_FOLDER) != NULL ) {
