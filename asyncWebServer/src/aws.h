@@ -93,7 +93,7 @@ enum connection_state connection_send_static(struct connection *conn);
 void connection_complete_async_io(struct connection *conn);
 void connection_start_async_io(struct connection *conn);
 
-int parse_header(struct connection *conn);
+void parse_header(struct connection *conn);
 
 void receive_data(struct connection *conn);
 
