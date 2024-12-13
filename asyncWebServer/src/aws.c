@@ -55,7 +55,7 @@ static void connection_prepare_send_reply_header(struct connection *conn)
 	snprintf(buff, BUFSIZ, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n", conn->file_size);
 	strcpy(conn->send_buffer, buff);
 	conn->send_len = strlen(conn->send_buffer);
-	while(ret < conn->send_len) {
+	while (ret < conn->send_len) {
 		int s = send(conn->sockfd, conn->send_buffer + ret, conn->send_len - ret, 0);
 
 		if (s == -1)
@@ -173,7 +173,7 @@ void receive_data(struct connection *conn)
 		ret = recv(conn->sockfd, buf, BUFSIZ, 0);
 		if (ret == -1)
 			break;
-		if ( total_len + ret > BUFSIZ )
+		if (total_len + ret > BUFSIZ)
 			break;
 		total_len += ret;
 		strncat(conn->recv_buffer, buf, ret);
@@ -239,13 +239,12 @@ void handle_input(struct connection *conn)
 {
 	receive_data(conn);
 	parse_header(conn);
-	if (strstr(conn->request_path, AWS_REL_STATIC_FOLDER) != NULL) {
+	if (strstr(conn->request_path, AWS_REL_STATIC_FOLDER) != NULL)
 		conn->res_type = RESOURCE_TYPE_STATIC;
-	} else if (strstr(conn->request_path, AWS_REL_DYNAMIC_FOLDER) != NULL) {
+	else if (strstr(conn->request_path, AWS_REL_DYNAMIC_FOLDER) != NULL)
 		conn->res_type = RESOURCE_TYPE_DYNAMIC;
-	} else {
+	else
 		conn->res_type = RESOURCE_TYPE_NONE;
-	}
 	int fd = open(conn->request_path, O_RDONLY);
 
 	if (fd == -1)
@@ -259,12 +258,12 @@ void handle_output(struct connection *conn)
 	struct io_event event[1];
 	int ret = io_getevents(ctx, 1, 1, &event[0], NULL);
 
-	if ( conn->send_len == 0 ) {
+	if (conn->send_len == 0) {
 		connection_remove(conn);
 		return;
 	}
 	ret = 0;
-	while(ret < conn->async_read_len) {
+	while (ret < conn->async_read_len) {
 		int s = send(conn->sockfd, conn->send_buffer + ret, conn->async_read_len - ret, 0);
 
 		if (s == -1)
@@ -286,14 +285,12 @@ int main(void)
 
 		w_epoll_wait_infinite(epollfd, &rev);
 		if (rev.data.fd == listenfd) {
-			if (rev.events & EPOLLIN) {
-					handle_new_connection();
-			} else {
-				if (EPOLLOUT & rev.events)
-					handle_output((struct connection *)rev.data.ptr);
-				else
-					handle_input((struct connection *)rev.data.ptr);
-			}
+			if (rev.events & EPOLLIN)
+				handle_new_connection();
+			else if (EPOLLOUT & rev.events)
+				handle_output((struct connection *)rev.data.ptr);
+			else
+				handle_input((struct connection *)rev.data.ptr);
 		} else {
 			if (rev.events & EPOLLIN)
 				handle_input((struct connection *)rev.data.ptr);
