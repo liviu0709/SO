@@ -35,6 +35,7 @@ static bool shell_cd(word_t *dir)
 		return 1;
 	}
 	return 0;
+    return 0;
 }
 
 /**
